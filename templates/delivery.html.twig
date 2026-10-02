@@ -1,0 +1,63 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>Livraison #{{ delivery.id }}</h1>
+    <p>{{ delivery.client.name }} · {{ delivery.date|date('d/m/Y') }} · <a href="{{ path('report', {id:delivery.client.id}) }}">Récapitulatif client</a>
+    </p>
+    <div class="card table-responsive mb-4">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th>Livré</th>
+                    <th>Prix unitaire</th>
+                    <th>Total livré</th>
+                    <th>Retourné</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}
+                    <tr>
+                        <td>{{ line.product_name }}</td>
+                        <td>{{ line.quantity }}</td>
+                        <td class="money">{{ line.unit_price_cents|mad }}</td>
+                        <td class="money">{{ (line.quantity * line.unit_price_cents)|mad }}</td>
+                        <td>{{ line.returned }}</td>
+                        <td>
+                            {% if line.returned < line.quantity %}
+                                <a href="{{ path('return_new', {id:line.id}) }}">Enregistrer un retour</a>
+                            {% else %}
+                                Retour complet
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <h2 class="h4">Retours datés</h2>
+    <div class="card table-responsive">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Date du retour</th>
+                    <th>Produit</th>
+                    <th>Quantité</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in returns %}
+                    <tr>
+                        <td>{{ row.date|date('d/m/Y') }}</td>
+                        <td>{{ row.product_name }}</td>
+                        <td>{{ row.quantity }}</td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3">Aucun retour.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

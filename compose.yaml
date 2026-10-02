@@ -1,0 +1,28 @@
+name: organic
+services:
+  web:
+    build: .
+    ports: ["127.0.0.1:8097:80"]
+    volumes: [".:/app"]
+    environment:
+      APP_ENV: prod
+      APP_DEBUG: "0"
+      APP_SECRET: ${APP_SECRET:?Create .env.local from .env.local.example}
+      DATABASE_URL: postgresql://organic:organic_local_only@db:5432/organic?serverVersion=17&charset=utf8
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_DB: organic
+      POSTGRES_USER: organic
+      POSTGRES_PASSWORD: organic_local_only
+    volumes: ["database:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U organic -d organic"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+volumes:
+  database:

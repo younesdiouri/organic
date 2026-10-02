@@ -1,0 +1,17 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <div class="card mx-auto p-4" style="max-width:28rem">
+        <h1 class="h3">Connexion administrateur</h1>
+        {% if error %}
+            <div class="alert alert-danger">Identifiants invalides ou trop de tentatives.</div>
+        {% endif %}
+        <form method="post">
+            <label class="form-label" for="email">E-mail</label>
+            <input class="form-control mb-3" id="email" type="email" name="_username" value="{{ email }}" required autocomplete="username">
+            <label class="form-label" for="password">Mot de passe</label>
+            <input class="form-control mb-3" id="password" type="password" name="_password" required autocomplete="current-password">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+            <button class="btn btn-success w-100">Se connecter</button>
+        </form>
+    </div>
+{% endblock %}

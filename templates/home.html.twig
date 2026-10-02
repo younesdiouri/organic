@@ -1,0 +1,14 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>Gestion du restaurant</h1>
+    <p class="text-secondary">Livraisons, retours et paiements · MAD</p>
+    <div class="row g-3">
+        {% for label,route in {'Clients':'clients','Catalogue':'products','Enregistrer une livraison':'delivery_new','Enregistrer un paiement':'payments'} %}
+            <div class="col-sm-6 col-lg-3">
+                <a class="card p-4 h-100 text-decoration-none" href="{{ path(route) }}">{{ label }}</a>
+            </div>
+        {% endfor %}
+    </div>
+    <p class="mt-4">{{ clients }} clients · {{ deliveries }} livraisons enregistrées.</p>
+    <p>Pour consulter un solde, ouvrez le récapitulatif du client. Il distingue l’activité de la période et le solde cumulé à la date de fin.</p>
+{% endblock %}

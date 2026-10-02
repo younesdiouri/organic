@@ -1,0 +1,45 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>Paiements</h1>
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card p-3">
+                <h2 class="h5">Enregistrer un paiement</h2>
+                {{ form_start(form) }}
+                {{ form_widget(form) }}
+                <button class="btn btn-success">Enregistrer</button>
+                {{ form_end(form) }}
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Montant</th>
+                            <th>Note</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td>{{ row.date|date('d/m/Y') }}</td>
+                                <td>
+                                    <a href="{{ path('report', {id:row.client.id}) }}">{{ row.client.name }}</a>
+                                </td>
+                                <td class="money">{{ row.amountCents|mad }}</td>
+                                <td>{{ row.note }}</td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="4">Aucun paiement.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

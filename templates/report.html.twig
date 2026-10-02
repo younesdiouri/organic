@@ -1,0 +1,73 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>Récapitulatif : {{ client.name }}</h1>
+    <div class="card p-3 mb-4">
+        {{ form_start(form) }}
+        {{ form_errors(form) }}
+        <div class="row align-items-end g-3">
+            <div class="col-sm-4">
+                {{ form_row(form.start) }}
+            </div>
+            <div class="col-sm-4">
+                {{ form_row(form.end) }}
+            </div>
+            <div class="col-sm-4 mb-3">
+                <button class="btn btn-success">Afficher</button>
+            </div>
+        </div>
+        {{ form_end(form) }}
+    </div>
+    {% if report %}
+        <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+            <h2 class="h4">Activité de la période</h2>
+            <a class="btn btn-outline-success" href="{{ path('report_csv', {id:client.id, form:{start:form.start.vars.value, end:form.end.vars.value}}) }}">Exporter CSV</a>
+        </div>
+        <div class="row g-3 mb-4">
+            {% for label,value in report.totals %}
+                <div class="col-md-4">
+                    <div class="card p-3">
+                        <span>{{ label }}s de la période</span>
+                        <strong class="money">{{ value|mad }}</strong>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        <div class="card p-3 mb-4">
+            <p>Solde avant la période : <strong class="money">{{ report.opening|mad }}</strong>
+            </p>
+            <p class="mb-0">Solde cumulé au {{ form.end.vars.value|date('d/m/Y') }} : <strong class="money">{{ report.balance|mad }}</strong>
+            </p>
+            <small class="text-secondary">Livraisons moins retours moins paiements, depuis le début. Un solde positif est dû par le client ; un solde négatif est un crédit.</small>
+        </div>
+        <div class="card table-responsive">
+            <table class="table mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Type</th>
+                        <th>Libellé</th>
+                        <th>Quantité</th>
+                        <th>Prix unitaire</th>
+                        <th>Montant</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in report.rows %}
+                        <tr>
+                            <td>{{ row.date|date('d/m/Y') }}</td>
+                            <td>{{ row.kind }}</td>
+                            <td>{{ row.label }}</td>
+                            <td>{{ row.quantity ?: '—' }}</td>
+                            <td class="money">{{ row.kind == 'Paiement' ? '—' : row.price|mad }}</td>
+                            <td class="money">{{ row.amount|mad }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="6">Aucune activité dans cette période.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% endif %}
+{% endblock %}

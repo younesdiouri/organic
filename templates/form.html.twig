@@ -1,0 +1,11 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>{{ title }}</h1>
+    <p>{{ help }}</p>
+    <div class="card p-4" style="max-width:40rem">
+        {{ form_start(form) }}
+        {{ form_widget(form) }}
+        <button class="btn btn-success">Enregistrer</button>
+        {{ form_end(form) }}
+    </div>
+{% endblock %}

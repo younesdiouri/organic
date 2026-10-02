@@ -1,0 +1,43 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>Nouvelle livraison</h1>
+    <p>Enregistrer la livraison le jour même. Les prix sont conservés, même si le catalogue change.</p>
+    <div class="card p-4">
+        {{ form_start(form) }}
+        {{ form_errors(form) }}
+        <div class="row">
+            <div class="col-md-6">
+                {{ form_row(form.client) }}
+            </div>
+            <div class="col-md-6">
+                {{ form_row(form.date) }}
+            </div>
+        </div>
+        {{ form_errors(form.items) }}
+        {% set nextIndex = 0 %}
+        {% for item in form.items %}
+            {% if item.vars.name matches '/^\\d+$/' %}
+                {% set nextIndex = max(nextIndex, item.vars.name + 1) %}
+            {% endif %}
+        {% endfor %}
+        <div id="delivery-lines" data-prototype="
+            {{ form_widget(form.items.vars.prototype)|e('html_attr') }}
+            " data-index="{{ nextIndex }}">
+            {% for item in form.items %}
+                <div class="delivery-line border rounded p-3 mb-3">
+                    {{ form_widget(item) }}
+                    <button type="button" class="remove-line btn btn-outline-danger btn-sm">Retirer la ligne</button>
+                </div>
+            {% endfor %}
+        </div>
+        <button type="button" id="add-line" class="btn btn-outline-success mb-3">Ajouter un produit</button>
+        <p class="h5">Total estimé : <output id="delivery-total" aria-live="polite">—</output>
+        </p>
+        <div>
+            <button class="btn btn-success">Enregistrer la livraison</button>
+        </div>
+        {{ form_end(form) }}
+    </div>
+    <script src="/delivery.js" defer>
+    </script>
+{% endblock %}

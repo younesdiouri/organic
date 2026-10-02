@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>
+            {% block title %}
+                Organic To Go
+            {% endblock %}
+        </title>
+        <link href="/bootstrap.min.css" rel="stylesheet">
+        <link href="/app.css" rel="stylesheet">
+    </head>
+    <body>
+        <nav class="navbar navbar-dark bg-success">
+            <div class="container d-flex flex-wrap gap-2">
+                <a class="navbar-brand" href="{{ path('home') }}">Organic To Go</a>
+                {% if app.user %}
+                    <div class="d-flex flex-wrap gap-3">
+                        <a class="text-white" href="{{ path('clients') }}">Clients</a>
+                        <a class="text-white" href="{{ path('products') }}">Catalogue</a>
+                        <a class="text-white" href="{{ path('deliveries') }}">Livraisons</a>
+                        <a class="text-white" href="{{ path('payments') }}">Paiements</a>
+                    </div>
+                    <form action="{{ path('logout') }}" method="post">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">
+                        <button class="btn btn-sm btn-outline-light">Déconnexion</button>
+                    </form>
+                {% endif %}
+            </div>
+        </nav>
+        <main class="container py-4">
+            {% for type,messages in app.flashes %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ type }}">{{ message }}</div>
+                {% endfor %}
+            {% endfor %}
+            {% block body %}
+            {% endblock %}
+        </main>
+    </body>
+</html>

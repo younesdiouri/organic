@@ -1,0 +1,49 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <h1>{{ title }}</h1>
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card p-3">
+                <h2 class="h5">{{ editing ? 'Modifier' : 'Ajouter' }}</h2>
+                {{ form_start(form) }}
+                {{ form_widget(form) }}
+                <button class="btn btn-success">Enregistrer</button>
+                {% if editing %}
+                    <a class="btn btn-link" href="{{ path(kind == 'client' ? 'clients' : 'products') }}">Annuler</a>
+                {% endif %}
+                {{ form_end(form) }}
+            </div>
+        </div>
+        <div class="col-lg-8">
+            <div class="card table-responsive">
+                <table class="table mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>{{ kind == 'client' ? 'Téléphone' : 'Prix par défaut' }}</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in rows %}
+                            <tr>
+                                <td>{{ row.name }}</td>
+                                <td>{{ kind == 'client' ? row.phone : row.priceCents|mad }}</td>
+                                <td>
+                                    <a href="{{ path(kind == 'client' ? 'client_edit' : 'product_edit', {id:row.id}) }}">Modifier</a>
+                                    {% if kind == 'client' %}
+                                        · <a href="{{ path('report', {id:row.id}) }}">Récapitulatif</a>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr>
+                                <td colspan="3">Aucun enregistrement.</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

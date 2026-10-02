@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+# Isolated test database in the Organic PostgreSQL container only.
+url='postgresql://organic:organic_local_only@db:5432/organic_test?serverVersion=17&charset=utf8'
+rtk docker compose --env-file .env.local exec -T -e APP_ENV=test -e DATABASE_URL="$url" web php bin/console cache:clear
+rtk docker compose --env-file .env.local exec -T -e APP_ENV=test -e DATABASE_URL="$url" web php bin/console doctrine:database:create --if-not-exists
+rtk docker compose --env-file .env.local exec -T -e APP_ENV=test -e DATABASE_URL="$url" web php bin/console doctrine:migrations:migrate --no-interaction
+rtk docker compose --env-file .env.local exec -T web vendor/bin/phpunit "$@"

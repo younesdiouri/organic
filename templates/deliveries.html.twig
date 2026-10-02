@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+    <div class="d-flex justify-content-between flex-wrap gap-2 mb-3">
+        <h1>Livraisons</h1>
+        <a class="btn btn-success" href="{{ path('delivery_new') }}">Nouvelle livraison</a>
+    </div>
+    <div class="card table-responsive">
+        <table class="table mb-0">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Client</th>
+                    <th>Détail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td>{{ row.date|date('d/m/Y') }}</td>
+                        <td>{{ row.client.name }}</td>
+                        <td>
+                            <a href="{{ path('delivery_show', {id:row.id}) }}">Livraison #{{ row.id }} et retours</a>
+                        </td>
+                    </tr>
+                {% else %}
+                    <tr>
+                        <td colspan="3">Aucune livraison.</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}
