@@ -1,5 +1,11 @@
 /vendor/
 /var/
 /.env.local
+/.env.*.local
+/.env.local.php
 /.phpunit.cache/
 /config/reference.php
+/node_modules/
+/.idea/
+/.vscode/
+.DS_Store

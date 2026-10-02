@@ -3,7 +3,7 @@
 Read /Users/younesdiouri/.codex/RTK.md. Prefix shell commands with rtk.
 
 ## Workflow
-The primary agent owns scope, architecture and review. GPT-6.1-sol implements in small verified slices. Local only: no deploy, remote creation, push or PR at this stage. Do not modify other projects.
+The primary agent owns scope, architecture and review. GPT-6.1-sol implements in small verified slices. Runtime remains local: no deployment at this stage. The user authorized publishing this repository publicly at younesdiouri/organic on their personal GitHub account. Do not modify other projects.
 
 ## Skills
 Read applicable project skills under .agents/skills: ponytail (always for coding), incremental-implementation, security-and-hardening, code-review-and-quality, code-simplification. Shared upstream references live in .agents/references. Apply proportionally to this small MVP; user scope prevails over generic process. No speculative abstractions, feature flags, queues, API layer or enterprise architecture. Verify current version-specific Symfony documentation before framework configuration. Use Symfony native security, forms and validation.
