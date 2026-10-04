@@ -1,6 +1,6 @@
 # Organic To Go — MVP local
 
-Application d’administration française pour un restaurant, Symfony 7.4 LTS / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local uniquement. Aucun déploiement. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
+Application d’administration française pour un restaurant, Symfony 8.1 / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local uniquement. Aucun déploiement. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
 
 ## Démarrer
 
@@ -22,7 +22,7 @@ Si le port est occupé, ne pas arrêter les autres projets. Le dernier appel dem
 
 `.env.local` est ignoré par Git ; `--env-file .env.local` est nécessaire à chaque commande Compose. Ne pas recréer ce fichier à chaque démarrage. Le mot de passe PostgreSQL dans Compose est un identifiant de développement, jamais de production. Le réseau et le volume portent le préfixe `organic` ; la base n’a aucun port publié. Aucune interaction avec les services phalcon-user ou grrind.
 
-Composer est installé depuis l’image officielle `composer:2.8`. Le lockfile fixe les dépendances. Les scripts Composer sont désactivés et seul le plugin officiel `symfony/runtime`, qui génère le démarrage du runtime, est explicitement autorisé. Aucun Flex, script tiers ou installation JavaScript. Bootstrap est servi localement, sans CDN au chargement des pages.
+Composer est installé depuis l’image officielle `composer:2.10.3`. Le lockfile fixe les dépendances. Les scripts Composer sont désactivés et seul le plugin officiel `symfony/runtime`, qui génère le démarrage du runtime, est explicitement autorisé. Aucun Flex, script tiers ou installation JavaScript. Bootstrap est servi localement, sans CDN au chargement des pages.
 
 ## Démonstration fictive
 
@@ -77,7 +77,7 @@ rtk docker compose --env-file .env.local stop
 
 Les listes et le rapport restent simples pour un seul restaurant : pas de pagination et solde d’ouverture calculé en mémoire. Ajouter pagination et agrégats SQL lorsque le volume le justifie. Aucun moteur de tarification, inventaire global, portail client, moteur de taxe ni synchronisation automatique.
 
-Configuration vérifiée avec la documentation officielle [Symfony 7.4 setup](https://symfony.com/doc/7.4/setup.html), [security](https://symfony.com/doc/7.4/security.html) et [forms](https://symfony.com/doc/7.4/forms.html).
+Configuration vérifiée avec la documentation officielle [Symfony 8.1 setup](https://symfony.com/doc/8.1/setup.html), [security](https://symfony.com/doc/8.1/security.html) et [forms](https://symfony.com/doc/8.1/forms.html). Symfony 8.1 est une version stable à support court, maintenue jusqu’en janvier 2027 ; prévoir sa prochaine mise à jour avant cette échéance. DoctrineBundle 3 utilise les objets paresseux natifs de PHP 8.4 ; les anciennes options de génération de proxies ont été supprimées.
 
 
 ## Factures fournisseurs

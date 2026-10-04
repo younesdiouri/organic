@@ -14,5 +14,4 @@ class Admin implements UserInterface, PasswordAuthenticatedUserInterface
     public function getUserIdentifier(): string { return $this->email; }
     public function getPassword(): string { return $this->password; }
     public function getRoles(): array { return ['ROLE_ADMIN']; }
-    public function eraseCredentials(): void {}
 }
