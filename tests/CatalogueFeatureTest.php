@@ -247,6 +247,8 @@ final class CatalogueFeatureTest extends WebTestCase
             ['form[name]'=>'Doublon FICTIF', 'form[code]'=>$product->code],
             ['form[name]'=>'article fictif EXISTANT'],
             ['form[name]'=>'Autre FICTIF', 'form[aliases]'=>'ancien nom fictif'],
+            ['form[name]'=>'FICTIF UNIQUE'],
+            ['form[name]'=>'Référence FICTIVE', 'form[code]'=>'ancien nom fictif'],
         ] as $identity) {
             $this->submitNamed('/catalogue', 'form', $identity+['form[price]'=>'0']);
             self::assertResponseStatusCodeSame(422);

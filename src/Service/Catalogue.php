@@ -33,11 +33,11 @@ final class Catalogue
         $this->transaction(function() use ($product, $data) {
             $name = trim($data['name']); $code = trim($data['code'] ?? '') ?: null;
             $aliases = array_values(array_unique(array_filter(array_map('trim', preg_split('/\R/', $data['aliases'] ?? '')))));
-            $identities = array_map(self::normalize(...), [$name, ...$aliases]);
+            $identities = array_map(self::normalize(...), [$name, ...$aliases, ...($code === null ? [] : [$code])]);
             if (in_array('', $identities, true)) { throw new \InvalidArgumentException('Nom ou alias vide.'); }
             foreach ($this->em->getConnection()->fetchAllAssociative('SELECT id,name,code,aliases FROM product') as $row) {
                 if ((int)$row['id'] === $product->id) { continue; }
-                $other = array_map(self::normalize(...), [$row['name'], ...json_decode($row['aliases'], true)]);
+                $other = array_map(self::normalize(...), [$row['name'], ...json_decode($row['aliases'], true), ...($row['code'] === null ? [] : [$row['code']])]);
                 if (array_intersect($identities, $other) || ($code !== null && self::normalize($code) === self::normalize($row['code'] ?? ''))) {
                     throw new \InvalidArgumentException('Nom, alias ou référence déjà utilisé par « '.$row['name'].' ».');
                 }

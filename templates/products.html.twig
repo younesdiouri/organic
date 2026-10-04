@@ -3,12 +3,12 @@
 <h1>Catalogue</h1>
 <p>Matières premières, préparations, plats et emballages partagent le même référentiel.</p>
 <div class="row g-4">
-<div class="col-lg-4"><div class="card p-3">
+<div class="col-lg-4 {{ editing ? 'order-1' : 'order-2 order-lg-1' }}"><div class="card p-3">
 <h2 class="h5">{{ editing ? 'Modifier l’article' : 'Ajouter un article' }}</h2>
 {{ form_start(form) }}{{ form_widget(form) }}<button class="btn btn-success">Enregistrer</button>
 {% if editing %}<a class="btn btn-link" href="{{ path('product_show',{id:product.id}) }}">Recette et achats</a>{% endif %}
 {{ form_end(form) }}</div></div>
-<div class="col-lg-8">
+<div class="col-lg-8 {{ editing ? 'order-2' : 'order-1 order-lg-2' }}">
 <form method="get" class="card p-3 mb-3 d-flex gap-2">
 <label for="q">Rechercher</label><input id="q" name="q" class="form-control" value="{{ query }}" placeholder="Nom, référence ou alias">
 <label for="kind">Type</label><select id="kind" name="kind" class="form-select"><option value="">Tous</option>{% for label,value in kinds %}<option value="{{ value }}" {{ kind == value ? 'selected' }}>{{ label }}</option>{% endfor %}</select>

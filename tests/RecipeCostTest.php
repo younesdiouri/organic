@@ -21,6 +21,15 @@ final class RecipeCostTest extends TestCase
         $offer->preferred = false; self::assertFalse($cost->calculate($dish)['complete']); self::assertNull($cost->calculate($dish)['cents']);
         $ingredient->knownZeroCost = true; self::assertSame(0, $cost->calculate($dish)['cents']);
     }
+    public function testOverflowCannotDisplayAKnownBatchWithUnknownUnitCost(): void
+    {
+        $ingredient = new Product(); $ingredient->kind = 'ingredient'; $ingredient->unit = 'KG';
+        $offer = new PurchaseOffer(); $offer->product = $ingredient; $offer->priceCents = 100000000; $offer->quantity = '0.000001'; $offer->unit = 'KG'; $offer->preferred = true; $ingredient->purchaseOffers->add($offer);
+        $recipe = new Product(); $recipe->kind = 'preparation'; $recipe->unit = 'KG'; $recipe->recipeComplete = true; $recipe->recipeOutputQuantity = '0.000001';
+        $line = new RecipeLine(); $line->parent = $recipe; $line->component = $ingredient; $line->unit = 'KG'; $line->quantity = '1000'; $recipe->recipeLines->add($line);
+        $cost = (new RecipeCost())->calculate($recipe);
+        self::assertFalse($cost['complete']); self::assertNull($cost['cents']); self::assertNull($cost['unitCents']);
+    }
     public function testSharedNestedBranchesRemainBounded(): void
     {
         $leaf = new Product(); $leaf->kind = 'ingredient'; $leaf->unit = 'KG'; $leaf->knownZeroCost = true;
