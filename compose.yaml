@@ -1,7 +1,9 @@
 name: organic
 services:
   web:
-    build: .
+    build:
+      context: .
+      target: dev
     ports: ["127.0.0.1:8097:80"]
     volumes: [".:/app"]
     environment:

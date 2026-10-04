@@ -1,15 +1,20 @@
 framework:
+  trusted_proxies: '%env(TRUSTED_PROXIES)%'
+  trusted_headers: ['x-forwarded-proto']
   secret: '%env(APP_SECRET)%'
   default_locale: fr
   csrf_protection: true
   form: true
   validation: { enable_attributes: true }
   session:
+    save_path: '%env(SESSION_SAVE_PATH)%'
     cookie_httponly: true
     cookie_samesite: lax
     cookie_secure: auto
   router: { utf8: true }
   handle_all_throwables: true
+  cache:
+    directory: '%env(APP_CACHE_DIR)%'
 when@test:
   framework:
     test: true

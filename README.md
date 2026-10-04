@@ -1,6 +1,6 @@
-# Organic To Go — MVP local
+# Organic To Go
 
-Application d’administration française pour un restaurant, Symfony 8.1 / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local uniquement. Aucun déploiement. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
+Application d’administration française pour un restaurant, Symfony 8.1 / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local et déploiement Fly autorisé sur `organic-to-go`. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
 
 ## Démarrer
 
@@ -136,3 +136,21 @@ Le chemin désigne le fichier **dans le conteneur** ; le montage existant `.:/ap
 Le bouton **Envoyer les documents manquants dans Google Sheets** transmet tous les documents validés ; il ne reprend pas le filtre visuel et n’effectue aucune synchronisation automatique. Le service signe un JWT RS256 avec OpenSSL natif, obtient un token OAuth limité à Sheets et utilise des URLs Google fixes. Il crée l’onglet dédié s’il manque, vérifie ses en-têtes et lit les IDs de la première colonne avant d’ajouter uniquement les entrées absentes. Les écritures utilisent `RAW` : les textes ressemblant à des formules restent du texte. La colonne « Centimes MAD » est un entier numérique exact pour les sommes. Un verrou PostgreSQL local sérialise les envois concurrents. Un nouvel envoi après une réponse perdue relit les IDs, évitant les doublons. Ne pas modifier/supprimer manuellement ces IDs dans cet onglet. Les données locales restent la référence ; aucune importation depuis Sheets. Sans credentials valides, le CSV reste utilisable.
 
 Les tests couvrent l’extraction avec API simulée (TTC littéral, coupure, HT/TVA incohérents, réponse invalide/quota/refus), les contrôles photo, les propriétaires/sessions/CSRF, la confirmation TTC obligatoire, les snapshots, doublons et répétitions, le nettoyage, le CSV sécurisé et Google Sheets `RAW`/idempotent. Un test réel OpenAI ou Google Sheets exige les credentials facultatifs et n’est pas simulé dans l’interface.
+
+## Déploiement Fly
+
+`fly.toml` définit une seule Machine web toujours active à Paris (`cdg`), CPU partagé et 512 Mo, sans worker. La base PostgreSQL dédiée existante reste externe à cette application. Le volume `organic_data` monté sur `/data` conserve photos privées, sessions et cache des limitations de connexion ; le cache du conteneur Symfony reste éphémère. Les déploiements ne changent ni la base locale ni les autres applications Fly.
+
+L’image `prod` contient uniquement le code et les dépendances de production verrouillées. `.dockerignore` exclut secrets, photos, sessions, documents privés et dépendances locales. Le démarrage exige `APP_SECRET` et `DATABASE_URL`, prépare seulement les trois répertoires connus du volume et chauffe le cache comme `www-data`. Les migrations sont exécutées dans la Machine de release sans volume avant le démarrage web. Apache accepte deux requêtes simultanées pour rester dans les 512 Mo ; une lecture IA longue peut occuper l’une de ces places.
+
+```sh
+rtk proxy fly volumes create organic_data --app organic-to-go --region cdg --size 1
+# Importer APP_SECRET, DATABASE_URL et éventuellement OPENAI_API_KEY via stdin sécurisé.
+rtk proxy fly secrets import --app organic-to-go
+rtk proxy fly deploy --app organic-to-go --ha=false
+rtk proxy fly ssh console --app organic-to-go --pty -C "su -s /bin/sh www-data -c \"php bin/console app:admin votre-adresse@example.com\""
+```
+
+Ne pas utiliser le compte de démonstration en production. Le volume unique implique une seule Machine ; un redéploiement peut occasionner une brève interruption. Sauvegarder séparément PostgreSQL et le volume Fly. Les brouillons expirés sont nettoyés lors de l’utilisation ou par `app:invoice-drafts:cleanup`, sans tâche automatique. Google Sheets reste désactivé tant que ses credentials dédiés ne sont pas configurés.
+
+HTTPS est imposé par Fly. Symfony fait confiance aux adresses privées du proxy pour `X-Forwarded-Proto` uniquement ; les en-têtes de host et port transmis ne sont pas acceptés. En local `TRUSTED_PROXIES` est vide. La limitation de connexion utilise l’adresse du proxy : son quota global peut donc être partagé entre utilisateurs, choix conservateur pour cette petite application administrative. Sources : [proxies Symfony 8.1](https://symfony.com/doc/8.1/deployment/proxies.html), [en-têtes Fly](https://fly.io/docs/networking/request-headers/) et [configuration Fly](https://fly.io/docs/reference/configuration/).

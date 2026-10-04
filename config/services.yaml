@@ -1,4 +1,8 @@
 parameters:
+  env(TRUSTED_PROXIES): ''
+  env(SESSION_SAVE_PATH): '%kernel.project_dir%/var/sessions'
+  env(APP_CACHE_DIR): '%kernel.cache_dir%/pools'
+  env(INVOICE_DRAFTS_DIR): '%kernel.project_dir%/var/invoice-drafts'
   env(OPENAI_API_KEY): ''
   env(OPENAI_INVOICE_MODEL): 'gpt-6-luna'
   env(GOOGLE_SHEETS_CREDENTIALS_FILE): ''
@@ -14,6 +18,9 @@ services:
       $credentialsFile: '%env(GOOGLE_SHEETS_CREDENTIALS_FILE)%'
       $spreadsheetId: '%env(GOOGLE_SHEETS_SPREADSHEET_ID)%'
       $tabName: '%env(GOOGLE_SHEETS_TAB)%'
+  App\Service\InvoiceDrafts:
+    arguments:
+      $root: '%env(INVOICE_DRAFTS_DIR)%'
 when@test:
   services:
     App\Service\InvoiceDrafts:

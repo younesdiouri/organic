@@ -1,0 +1,47 @@
+app = 'organic-to-go'
+primary_region = 'cdg'
+
+[build]
+  build-target = 'prod'
+
+[env]
+  APP_ENV = 'prod'
+  APP_DEBUG = '0'
+  TRUSTED_PROXIES = 'private_ranges'
+  SESSION_SAVE_PATH = '/data/sessions'
+  INVOICE_DRAFTS_DIR = '/data/invoice-drafts'
+  APP_CACHE_DIR = '/data/cache-app'
+  OPENAI_INVOICE_MODEL = 'gpt-6-luna'
+
+[deploy]
+  release_command = 'php bin/console doctrine:migrations:migrate --no-interaction'
+
+[[mounts]]
+  source = 'organic_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 80
+  force_https = true
+  auto_stop_machines = 'off'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+  [[http_service.checks]]
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '30s'
+    method = 'GET'
+    path = '/connexion'
+    [http_service.checks.headers]
+      X-Forwarded-Proto = 'https'
+
+[[restart]]
+  policy = 'always'
+  processes = ['app']
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory = '512mb'

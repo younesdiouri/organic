@@ -1,0 +1,16 @@
+.git
+.env*
+var
+vendor
+output
+.agents
+.codex
+tests
+*.pem
+*.key
+*service-account*.json
+node_modules
+.idea
+.vscode
+.phpunit.cache
+.DS_Store
