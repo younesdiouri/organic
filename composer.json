@@ -4,6 +4,7 @@
   "license": "proprietary",
   "require": {
     "php": ">=8.4",
+    "ext-bcmath": "*",
     "ext-intl": "*",
     "ext-pdo": "*",
     "doctrine/doctrine-bundle": "^3.3",
