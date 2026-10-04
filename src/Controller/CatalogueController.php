@@ -3,7 +3,7 @@ namespace App\Controller;
 
 use App\Entity\{Client, Product, RecipeLine, PurchaseOffer, Supplier};
 use App\Form\PriceType;
-use App\Service\{Money, Catalogue, RecipeCost};
+use App\Service\{Money, Catalogue, RecipeCost, Quantity};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\{TextType, TextareaType, CheckboxType, ChoiceType};
@@ -84,17 +84,17 @@ final class CatalogueController extends AbstractController
         $offer = $offerId ? $this->em->find(PurchaseOffer::class, $offerId) : new PurchaseOffer();
         if (!$line || !$offer || ($lineId && $line->parent->id !== $id) || ($offerId && $offer->product->id !== $id)) { throw $this->createNotFoundException(); }
         $factory = $this->container->get('form.factory');
-        $recipe = $factory->createNamedBuilder('recipe', data: ['outputQuantity'=>$product->recipeOutputQuantity, 'complete'=>$product->recipeComplete, 'notes'=>$product->recipeNotes])
+        $recipe = $factory->createNamedBuilder('recipe', data: ['outputQuantity'=>Quantity::format($product->recipeOutputQuantity), 'complete'=>$product->recipeComplete, 'notes'=>$product->recipeNotes])
             ->add('outputQuantity', TextType::class, ['label'=>'Quantité finale obtenue ('.$product->unit.')', 'required'=>false, 'attr'=>['inputmode'=>'decimal'], 'constraints'=>[new Assert\Length(max: 20)]])
             ->add('complete', CheckboxType::class, ['label'=>'Composition et rendement vérifiés', 'required'=>false])
             ->add('notes', TextareaType::class, ['label'=>'Points à vérifier / instructions', 'required'=>false, 'constraints'=>[new Assert\Length(max: 10000)]])->getForm()->handleRequest($request);
-        $component = $factory->createNamedBuilder('component', data: ['component'=>$lineId ? $line->component : null, 'quantity'=>$line->quantity, 'unit'=>$line->unit, 'quantityBasis'=>$line->quantityBasis, 'notes'=>$line->notes])
+        $component = $factory->createNamedBuilder('component', data: ['component'=>$lineId ? $line->component : null, 'quantity'=>Quantity::format($line->quantity), 'unit'=>$line->unit, 'quantityBasis'=>$line->quantityBasis, 'notes'=>$line->notes])
             ->add('component', EntityType::class, ['label'=>'Article réutilisé', 'class'=>Product::class, 'choice_label'=>fn(Product $p) => ($p->code ? $p->code.' — ' : '').$p->name.' ('.$p->unit.')', 'query_builder'=>fn($repo) => $repo->createQueryBuilder('p')->where('p.id <> :id')->setParameter('id', $id)->orderBy('p.name','ASC'), 'placeholder'=>'Choisir', 'constraints'=>[new Assert\NotNull()]])
             ->add('quantity', TextType::class, ['label'=>'Quantité consommée', 'attr'=>['inputmode'=>'decimal'], 'constraints'=>[new Assert\NotBlank(),new Assert\Length(max: 20)]])
             ->add('unit', ChoiceType::class, ['label'=>'Unité', 'choices'=>Catalogue::UNITS])
             ->add('quantityBasis', ChoiceType::class, ['label'=>'Base de quantité', 'choices'=>['Utilisable (pertes appliquées)'=>'usable','Brute (avant pertes)'=>'raw']])
             ->add('notes', TextareaType::class, ['label'=>'Instructions', 'required'=>false, 'constraints'=>[new Assert\Length(max: 10000)]])->getForm()->handleRequest($request);
-        $purchase = $factory->createNamedBuilder('offer', data: ['supplier'=>$offer->supplier, 'price'=>Money::format($offer->priceCents), 'quantity'=>$offer->quantity, 'unit'=>$offer->unit, 'usableYield'=>$offer->usableYield, 'preferred'=>$offer->preferred, 'notes'=>$offer->notes])
+        $purchase = $factory->createNamedBuilder('offer', data: ['supplier'=>$offer->supplier, 'price'=>Money::format($offer->priceCents), 'quantity'=>Quantity::format($offer->quantity), 'unit'=>$offer->unit, 'usableYield'=>Quantity::format($offer->usableYield), 'preferred'=>$offer->preferred, 'notes'=>$offer->notes])
             ->add('supplier', EntityType::class, ['label'=>'Fournisseur', 'class'=>Supplier::class, 'choice_label'=>'name', 'required'=>false, 'placeholder'=>'Fournisseur à renseigner', 'query_builder'=>fn($repo) => $repo->createQueryBuilder('s')->orderBy('s.name','ASC')])
             ->add('price', PriceType::class, ['label'=>'Prix du conditionnement HT (MAD)', 'constraints'=>[new Assert\NotBlank()]])
             ->add('quantity', TextType::class, ['label'=>'Quantité du conditionnement', 'attr'=>['inputmode'=>'decimal'], 'constraints'=>[new Assert\NotBlank(),new Assert\Length(max: 20)]])

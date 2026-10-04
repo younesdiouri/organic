@@ -3,3 +3,7 @@ body{background:#f5f7f3}a{color:#146c43}.card{border:0;box-shadow:0 2px 10px #16
 .invoice-preview { max-height: 45vh; width: 100%; object-fit: contain; }
 
 .form-check-input[type=checkbox]:checked{background-image:url('/checkbox-check.svg')}
+
+.row-actions .btn{width:44px;height:44px;display:inline-flex;align-items:center;justify-content:center}
+
+.row-details{min-width:0;overflow-wrap:anywhere}

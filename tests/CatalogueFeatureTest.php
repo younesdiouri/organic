@@ -45,6 +45,49 @@ final class CatalogueFeatureTest extends WebTestCase
         $this->browser->submit($crawler->filter('form[name="'.$name.'"]')->form($values));
     }
 
+    public function testPersistedQuantitiesDisplayWithoutTrailingDecimalZeros(): void
+    {
+        $product = $this->product('Recette FICTIVE quantités');
+        $product->recipeOutputQuantity = '8.000000';
+        $product->recipeComplete = true;
+        $ingredient = $this->product('Ingrédient FICTIF quantités', 'ingredient');
+        $ingredient->unit = 'KG';
+        $line = new RecipeLine();
+        $line->parent = $product;
+        $line->component = $ingredient;
+        $line->quantity = '0.180000';
+        $line->unit = 'KG';
+        $product->recipeLines->add($line);
+        $offer = new PurchaseOffer();
+        $offer->product = $product;
+        $offer->quantity = '10.000000';
+        $offer->usableYield = '0.900000';
+        $offer->unit = 'PORTION';
+        $product->purchaseOffers->add($offer);
+        $this->em->flush();
+        $id = $product->id;
+        $lineId = $line->id;
+        $offerId = $offer->id;
+        $this->em->clear();
+        $this->browser->loginUser($this->admin);
+        $this->browser->request('GET', '/catalogue/'.$id.'/fiche');
+        self::assertResponseIsSuccessful();
+        self::assertInputValueSame('recipe[outputQuantity]', '8');
+        self::assertSelectorTextContains('body', '0.18 KG');
+        self::assertSelectorTextContains('body', '10 PORTION');
+        self::assertSelectorTextContains('body', 'Rendement utilisable : 0.9');
+        self::assertSelectorTextNotContains('body', '0.180000');
+        $this->browser->request('GET', '/catalogue/'.$id.'/composition/'.$lineId.'/modifier');
+        self::assertInputValueSame('component[quantity]', '0.18');
+        $this->browser->request('GET', '/catalogue/'.$id.'/achat/'.$offerId.'/modifier');
+        self::assertInputValueSame('offer[quantity]', '10');
+        self::assertInputValueSame('offer[usableYield]', '0.9');
+        self::assertSame('', \App\Service\Quantity::format(null));
+        self::assertSame('0', \App\Service\Quantity::format('0.000000'));
+        self::assertSame('100', \App\Service\Quantity::format('100'));
+        self::assertSame('0.123456', \App\Service\Quantity::format('0.123456'));
+    }
+
     public function testCatalogueRoutesAndMutationsRequireAuthenticationAndCsrf(): void
     {
         $product = $this->product('FICTIF protégé');
