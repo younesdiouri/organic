@@ -11,7 +11,7 @@ final class DeliveryLineType extends AbstractType
 {
     public function buildForm(FormBuilderInterface $builder, array $options): void
     {
-        $builder->add('product', EntityType::class, ['class'=>Product::class, 'choice_label'=>fn(Product $product) => $product->name.' — '.Money::format($product->priceCents).' MAD', 'choice_attr'=>fn(Product $product) => ['data-price-cents'=>$product->priceCents], 'label'=>'Produit', 'placeholder'=>'Choisir', 'constraints'=>[new Assert\NotNull()]])
+        $builder->add('product', EntityType::class, ['class'=>Product::class, 'query_builder'=>fn($repo) => $repo->createQueryBuilder('p')->where('p.active = true AND p.sellable = true AND p.forDelivery = true')->orderBy('p.name', 'ASC'), 'choice_label'=>fn(Product $product) => $product->name.' — '.Money::format($product->priceCents).' MAD', 'choice_attr'=>fn(Product $product) => ['data-price-cents'=>$product->priceCents], 'label'=>'Produit', 'placeholder'=>'Choisir', 'constraints'=>[new Assert\NotNull()]])
             ->add('quantity', IntegerType::class, ['label'=>'Quantité', 'constraints'=>[new Assert\NotBlank(), new Assert\Range(min: 1, max: 100000)], 'attr'=>['min'=>1,'max'=>100000]])
             ->add('price', PriceType::class, ['label'=>'Prix unitaire (MAD)', 'required'=>false, 'help'=>'Laisser vide pour le prix du catalogue.']);
     }

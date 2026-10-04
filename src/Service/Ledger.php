@@ -16,6 +16,7 @@ final class Ledger
         $lines = [];
         foreach ($items as $item) {
             if (!($item['product'] ?? null) instanceof Product) { throw new \InvalidArgumentException('Produit invalide.'); }
+            if (!$item['product']->deliveryAvailable()) { throw new \InvalidArgumentException('Cet article est indisponible en livraison.'); }
             $this->quantity($item['quantity']);
             $price = ($item['price'] ?? '') === '' ? $item['product']->priceCents : Money::parse($item['price']);
             $line = new DeliveryLine();

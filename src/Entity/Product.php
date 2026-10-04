@@ -10,19 +10,19 @@ class Product
     #[ORM\Column(length: 120)] public string $name = '';
     #[ORM\Column(name: 'price_cents')] public int $priceCents = 0;
     #[ORM\Column(length: 100, nullable: true, unique: true)] public ?string $code = null;
-    #[ORM\Column(length: 20)] public string $kind = 'dish';
-    #[ORM\Column(length: 120)] public string $category = '';
-    #[ORM\Column(type: 'json')] public array $aliases = [];
-    #[ORM\Column(length: 10)] public string $unit = 'PORTION';
-    #[ORM\Column] public bool $sellable = true;
-    #[ORM\Column(name: 'for_delivery')] public bool $forDelivery = true;
-    #[ORM\Column] public bool $active = true;
-    #[ORM\Column(name: 'known_zero_cost')] public bool $knownZeroCost = false;
-    #[ORM\Column(type: 'text')] public string $notes = '';
+    #[ORM\Column(length: 20, options: ['default'=>'dish'])] public string $kind = 'dish';
+    #[ORM\Column(length: 120, options: ['default'=>''])] public string $category = '';
+    #[ORM\Column(type: 'json', options: ['default'=>'[]'])] public array $aliases = [];
+    #[ORM\Column(length: 10, options: ['default'=>'PORTION'])] public string $unit = 'PORTION';
+    #[ORM\Column(options: ['default'=>true])] public bool $sellable = true;
+    #[ORM\Column(name: 'for_delivery', options: ['default'=>true])] public bool $forDelivery = true;
+    #[ORM\Column(options: ['default'=>true])] public bool $active = true;
+    #[ORM\Column(name: 'known_zero_cost', options: ['default'=>false])] public bool $knownZeroCost = false;
+    #[ORM\Column(type: 'text', options: ['default'=>''])] public string $notes = '';
     #[ORM\Column(name: 'recipe_output_quantity', type: 'decimal', precision: 18, scale: 6, nullable: true)] public ?string $recipeOutputQuantity = null;
-    #[ORM\Column(name: 'recipe_complete')] public bool $recipeComplete = false;
-    #[ORM\Column(name: 'recipe_notes', type: 'text')] public string $recipeNotes = '';
-    #[ORM\Column(type: 'json')] public array $source = [];
+    #[ORM\Column(name: 'recipe_complete', options: ['default'=>false])] public bool $recipeComplete = false;
+    #[ORM\Column(name: 'recipe_notes', type: 'text', options: ['default'=>''])] public string $recipeNotes = '';
+    #[ORM\Column(type: 'json', options: ['default'=>'[]'])] public array $source = [];
     #[ORM\OneToMany(mappedBy: 'parent', targetEntity: RecipeLine::class, cascade: ['persist'], orphanRemoval: true)]
     #[ORM\OrderBy(['position'=>'ASC', 'id'=>'ASC'])]
     public Collection $recipeLines;

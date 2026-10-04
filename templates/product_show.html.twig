@@ -1,0 +1,36 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+<a href="{{ path('products') }}">← Catalogue</a>
+<h1>{{ product.name }}</h1><p>{{ product.code }} · {{ product.category }} · {{ product.unit }}{% if not product.active %} · Archivé{% endif %}</p>
+<p><a class="btn btn-outline-success" href="{{ path('product_edit',{id:product.id}) }}">Modifier l’article</a></p>
+{% if product.aliases %}<p>Alias : {{ product.aliases|join(', ') }}</p>{% endif %}
+{% if product.notes %}<p class="text-break">{{ product.notes }}</p>{% endif %}
+<div class="alert {{ cost.complete ? 'alert-success' : 'alert-warning' }}">
+{% if cost.complete %}<strong>Coût matière : {{ cost.cents|mad }}</strong>
+{% if product.recipeLines|length %}<div>Pour {{ product.recipeOutputQuantity }} {{ product.unit }} obtenus · {{ cost.unitCents|mad }} / {{ product.unit }}</div>{% else %}<div>Par {{ product.unit }}</div>{% endif %}
+{% else %}<strong>Coût incomplet</strong>{% for warning in cost.warnings %}<div>{{ warning }}</div>{% endfor %}{% endif %}
+</div>
+<div class="row g-4">
+<section class="col-lg-7"><div class="card p-3 mb-3"><h2 class="h4">Recette et rendement</h2>
+{{ form_start(recipe) }}{{ form_widget(recipe) }}<button class="btn btn-success">Enregistrer la recette</button>{{ form_end(recipe) }}
+</div><div class="card p-3 mb-3"><h2 class="h4">Composition</h2>
+{% for line in product.recipeLines %}<div class="border-bottom py-3">
+<a href="{{ path('product_show',{id:line.component.id}) }}">{{ line.component.name }}</a> — {{ line.quantity }} {{ line.unit }} ({{ line.quantityBasis == 'raw' ? 'brut' : 'utilisable' }})
+{% if line.notes %}<p>{{ line.notes }}</p>{% endif %}
+<div class="d-flex gap-2"><a href="{{ path('recipe_line_edit',{id:product.id,lineId:line.id}) }}">Modifier</a>
+<form method="post" action="{{ path('recipe_line_remove',{id:product.id,lineId:line.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('remove_line_'~line.id) }}"><button class="btn btn-link p-0">Retirer</button></form></div></div>
+{% else %}<p>Aucun composant. Une recette vide garde un coût incomplet.</p>{% endfor %}
+<h3 class="h5 mt-3">{{ lineEditing ? 'Modifier le composant' : 'Ajouter un composant' }}</h3>
+{{ form_start(component) }}{{ form_widget(component) }}<button class="btn btn-success">{{ lineEditing ? 'Enregistrer le composant' : 'Ajouter le composant' }}</button>{{ form_end(component) }}
+</div></section>
+<section class="col-lg-5"><div class="card p-3 mb-3"><h2 class="h4">Achats et fournisseurs</h2>
+<p>Les quantités doivent utiliser l’unité de l’article. Convertir les grammes en kg et les ml en litres. Un prix absent conserve un coût incomplet.</p>
+{% for purchase in product.purchaseOffers %}<div class="border-bottom py-3">
+<strong>{{ purchase.supplier ? purchase.supplier.name : 'Fournisseur à renseigner' }}</strong>{% if purchase.preferred %} <span class="badge text-bg-success">Préféré</span>{% endif %}
+<div>{{ purchase.priceCents|mad }} HT / {{ purchase.quantity }} {{ purchase.unit }}</div><div>Rendement utilisable : {{ purchase.usableYield }}</div>{% if purchase.notes %}<p>{{ purchase.notes }}</p>{% endif %}
+<div class="d-flex gap-2"><a href="{{ path('purchase_offer_edit',{id:product.id,offerId:purchase.id}) }}">Modifier</a><form method="post" action="{{ path('purchase_offer_remove',{id:product.id,offerId:purchase.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('remove_offer_'~purchase.id) }}"><button class="btn btn-link p-0">Retirer</button></form></div></div>
+{% else %}<p>Aucun tarif d’achat. Les fabrications internes sont décrites par leur recette.</p>{% endfor %}
+<h3 class="h5 mt-3">{{ offerEditing ? 'Modifier le tarif' : 'Ajouter un tarif' }}</h3>
+{{ form_start(offer) }}{{ form_widget(offer) }}<button class="btn btn-success">{{ offerEditing ? 'Enregistrer le tarif' : 'Ajouter le tarif' }}</button>{{ form_end(offer) }}
+</div><div class="card p-3"><h2 class="h4">Utilisé dans</h2>{% for line in usedIn %}<p><a href="{{ path('product_show',{id:line.parent.id}) }}">{{ line.parent.name }}</a></p>{% else %}<p>Aucune recette utilisatrice.</p>{% endfor %}</div></section></div>
+{% endblock %}

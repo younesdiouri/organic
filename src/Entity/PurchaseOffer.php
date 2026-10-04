@@ -3,6 +3,7 @@ namespace App\Entity;
 use Doctrine\ORM\Mapping as ORM;
 #[ORM\Entity]
 #[ORM\Table(name: 'purchase_offer')]
+#[ORM\UniqueConstraint(name: 'purchase_offer_preferred', columns: ['product_id'], options: ['where'=>'(preferred = true)'])]
 class PurchaseOffer
 {
     #[ORM\Id, ORM\GeneratedValue, ORM\Column] public ?int $id = null;

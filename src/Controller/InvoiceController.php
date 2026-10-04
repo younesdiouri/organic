@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 use App\Entity\Supplier;
-use App\Service\{InvoiceDrafts, InvoiceExtractor, InvoiceLedger, InvoiceSheets, Money};
+use App\Service\{InvoiceDrafts, InvoiceExtractor, InvoiceLedger, InvoiceSheets, Money, Catalogue};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -13,7 +13,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 final class InvoiceController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $em, private InvoiceDrafts $drafts, private InvoiceLedger $ledger, private InvoiceExtractor $extractor, private InvoiceSheets $sheets) {}
+    public function __construct(private EntityManagerInterface $em, private InvoiceDrafts $drafts, private InvoiceLedger $ledger, private InvoiceExtractor $extractor, private InvoiceSheets $sheets, private Catalogue $catalogue) {}
     #[Route('/factures-fournisseurs', name: 'invoices', methods: ['GET', 'POST'])]
     public function index(Request $request): Response
     {
@@ -80,19 +80,15 @@ final class InvoiceController extends AbstractController
             ->add('label', TextType::class, ['label'=>'Libellé interne par défaut', 'constraints'=>[new Assert\NotBlank(), new Assert\Length(max:180)]])
             ->getForm()->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
-            $data = $form->getData();
-            $aliases = array_values(array_filter(array_map('trim', explode("\n", $data['aliases'] ?? ''))));
-            if (count($aliases)>20 || array_filter($aliases, fn($a)=>mb_strlen($a)>180)) { $form->addError(new FormError('Maximum 20 alias de 180 caractères.')); }
-            else {
-                $supplier->name = trim($data['name']); $supplier->aliases = $aliases; $supplier->reportingLabel = trim($data['label']);
-                $this->em->persist($supplier); $this->em->flush();
+            try {
+                $this->catalogue->saveSupplier($supplier, $form->getData());
                 $this->addFlash('success', 'Fournisseur enregistré. Les documents déjà validés conservent leurs libellés.');
                 $token = $request->query->get('draft');
                 if ($token) { return $this->redirectToRoute('invoice_draft', ['token'=>$token, 'supplier'=>$supplier->id]); }
                 return $this->redirectToRoute('suppliers');
-            }
+            } catch (\InvalidArgumentException $e) { $form->addError(new FormError($e->getMessage())); }
         }
-        return $this->render('invoices/suppliers.html.twig', ['form'=>$form, 'rows'=>$this->em->getRepository(Supplier::class)->findBy([], ['name'=>'ASC']), 'draftToken'=>$request->query->get('draft')]);
+        return $this->render('invoices/suppliers.html.twig', ['form'=>$form, 'rows'=>$this->em->getRepository(Supplier::class)->findBy([], ['name'=>'ASC']), 'draftToken'=>$request->query->get('draft')], new Response(status: $form->isSubmitted() ? 422 : 200));
     }
     #[Route('/factures-fournisseurs/brouillon/{token}', name: 'invoice_draft', requirements: ['token'=>'[a-f0-9]{64}'], methods: ['GET', 'POST'])]
     public function draft(Request $request, string $token): Response

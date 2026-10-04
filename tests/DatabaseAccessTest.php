@@ -47,7 +47,7 @@ final class DatabaseAccessTest extends KernelTestCase
         self::bootKernel();
         $db = self::getContainer()->get(EntityManagerInterface::class)->getConnection();
         self::assertSame('organic_test', $db->fetchOne('SELECT current_database()'), 'Probe roles must only be created in the isolated local test database.');
-        $tables = ['admin', 'client', 'product', 'delivery', 'delivery_line', 'line_return', 'payment', 'supplier', 'supplier_invoice'];
+        $tables = ['admin', 'client', 'product', 'recipe_line', 'purchase_offer', 'delivery', 'delivery_line', 'line_return', 'payment', 'supplier', 'supplier_invoice'];
         foreach ($tables as $table) {
             $flags = $db->fetchAssociative('SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE oid = ?::regclass', ['public.'.$table]);
             self::assertTrue($flags['relrowsecurity']);
