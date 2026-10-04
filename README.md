@@ -22,7 +22,7 @@ Si le port est occupé, ne pas arrêter les autres projets. Le dernier appel dem
 
 `.env.local` est ignoré par Git ; `--env-file .env.local` est nécessaire à chaque commande Compose. Ne pas recréer ce fichier à chaque démarrage. Le mot de passe PostgreSQL dans Compose est un identifiant de développement, jamais de production. Le réseau et le volume portent le préfixe `organic` ; la base n’a aucun port publié. Aucune interaction avec les services phalcon-user ou grrind.
 
-Composer est installé depuis l’image officielle `composer:2.10.3`. Le lockfile fixe les dépendances. Les scripts Composer sont désactivés et seul le plugin officiel `symfony/runtime`, qui génère le démarrage du runtime, est explicitement autorisé. Aucun Flex, script tiers ou installation JavaScript. Bootstrap est servi localement, sans CDN au chargement des pages.
+Composer est installé depuis l’image officielle `composer:2.10.3`. Le lockfile fixe les dépendances. Les scripts Composer sont désactivés et seul le plugin officiel `symfony/runtime`, qui génère le démarrage du runtime, est explicitement autorisé. Le build de production autorise explicitement Composer sous root avec `COMPOSER_ALLOW_SUPERUSER=1` pour ce plugin de confiance et vérifie la présence de `vendor/autoload_runtime.php` avant de terminer ([Composer](https://getcomposer.org/doc/faqs/how-to-install-untrusted-packages-safely.md), [Runtime Symfony 8.1](https://symfony.com/doc/8.1/components/runtime.html)). Aucun Flex, script tiers ou installation JavaScript. Bootstrap est servi localement, sans CDN au chargement des pages.
 
 ## Démonstration fictive
 

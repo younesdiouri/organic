@@ -12,7 +12,7 @@ FROM base AS dev
 
 FROM base AS dependencies
 COPY composer.json composer.lock ./
-RUN composer install --no-dev --no-scripts --no-interaction --prefer-dist --no-progress
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --no-scripts --no-interaction --prefer-dist --no-progress
 
 FROM base AS prod
 ENV APP_ENV=prod APP_DEBUG=0
@@ -25,7 +25,7 @@ COPY public public
 COPY templates templates
 COPY docker docker
 COPY --from=dependencies /app/vendor /app/vendor
-RUN composer dump-autoload --no-dev --no-scripts --classmap-authoritative && mkdir -p var && chown www-data:www-data var && chmod +x docker/production-entrypoint.sh
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer dump-autoload --no-dev --no-scripts --classmap-authoritative && test -s vendor/autoload_runtime.php && mkdir -p var && chown www-data:www-data var && chmod +x docker/production-entrypoint.sh
 RUN printf "<IfModule mpm_prefork_module>\nStartServers 1\nMinSpareServers 1\nMaxSpareServers 1\nServerLimit 2\nMaxRequestWorkers 2\nMaxConnectionsPerChild 500\n</IfModule>\n" > /etc/apache2/mods-available/mpm_prefork.conf
 ENTRYPOINT ["/app/docker/production-entrypoint.sh"]
 CMD ["apache2-foreground"]
