@@ -9,3 +9,23 @@
 /.idea/
 /.vscode/
 .DS_Store
+
+# Private source documents, generated reviews and database backups.
+/output/
+*.xls
+*.xlsx
+*.xlsm
+*.ods
+*.csv
+*.tsv
+*.pdf
+*.doc
+*.docx
+*.sql
+*.dump
+*.backup
+*.bak
+**/import-analysis/
+**/backups/
+*supplier-registry*.json
+*catalogue-manifest*.json
