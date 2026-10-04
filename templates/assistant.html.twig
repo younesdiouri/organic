@@ -7,10 +7,13 @@
         <div class="alert alert-warning">L’assistant sera disponible une fois la clé OpenAI configurée côté serveur.</div>
     {% endif %}
     <div class="card mb-4"><div class="card-body">
-        {{ form_start(form) }}
+        {{ form_start(form, {attr: {id: 'assistant-form'}}) }}
         {{ form_errors(form) }}
         {{ form_row(form.question) }}
-        <button class="btn btn-success"{% if not configured %} disabled{% endif %}>Poser la question</button>
+        <button id="assistant-submit" class="btn btn-success"{% if not configured %} disabled{% endif %}>
+            <span class="spinner-border spinner-border-sm me-2 d-none" aria-hidden="true"></span>
+            <span class="assistant-submit-label" aria-live="polite">Poser la question</span>
+        </button>
         {{ form_end(form) }}
         <p class="small text-muted mt-3 mb-0">Chaque question est indépendante. Précisez les dates pour une activité et « coût matière » ou « prix de vente » pour un classement. La question et les données utiles sont transmises à OpenAI ; évitez d’ajouter des informations confidentielles inutiles.</p>
     </div></div>
@@ -33,4 +36,5 @@
             </div>
         </section>
     {% endif %}
+    <script src="/assistant.js?v=1" defer></script>
 {% endblock %}
