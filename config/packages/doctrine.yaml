@@ -1,6 +1,7 @@
 doctrine:
   dbal:
-    url: '%env(resolve:DATABASE_URL)%'
+    url: '%env(DATABASE_URL)%'
+    charset: utf8
     # Immutable invoice ledger is intentionally managed with DBAL + explicit migrations.
     schema_filter: '~^(?!supplier_invoice$)~'
   orm:
