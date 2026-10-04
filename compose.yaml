@@ -7,6 +7,11 @@ services:
     environment:
       APP_ENV: prod
       APP_DEBUG: "0"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_INVOICE_MODEL: ${OPENAI_INVOICE_MODEL:-gpt-6-luna}
+      GOOGLE_SHEETS_CREDENTIALS_FILE: ${GOOGLE_SHEETS_CREDENTIALS_FILE:-}
+      GOOGLE_SHEETS_SPREADSHEET_ID: ${GOOGLE_SHEETS_SPREADSHEET_ID:-}
+      GOOGLE_SHEETS_TAB: ${GOOGLE_SHEETS_TAB:-Factures fournisseurs}
       APP_SECRET: ${APP_SECRET:?Create .env.local from .env.local.example}
       DATABASE_URL: postgresql://organic:organic_local_only@db:5432/organic?serverVersion=17&charset=utf8
     depends_on:

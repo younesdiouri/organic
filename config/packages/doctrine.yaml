@@ -1,6 +1,8 @@
 doctrine:
   dbal:
     url: '%env(resolve:DATABASE_URL)%'
+    # Immutable invoice ledger is intentionally managed with DBAL + explicit migrations.
+    schema_filter: '~^(?!supplier_invoice$)~'
   orm:
     auto_generate_proxy_classes: true
     enable_lazy_ghost_objects: true

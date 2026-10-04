@@ -1,6 +1,6 @@
 # Organic To Go — MVP local
 
-Application d’administration française pour un restaurant, Symfony 7.4 LTS / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local uniquement. Aucun déploiement, service externe ou donnée privée importée.
+Application d’administration française pour un restaurant, Symfony 7.4 LTS / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local uniquement. Aucun déploiement. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
 
 ## Démarrer
 
@@ -75,6 +75,64 @@ Arrêter uniquement Organic sans effacer la base :
 rtk docker compose --env-file .env.local stop
 ```
 
-Les listes et le rapport restent simples pour un seul restaurant : pas de pagination et solde d’ouverture calculé en mémoire. Ajouter pagination et agrégats SQL lorsque le volume le justifie. Aucun moteur de tarification, inventaire global, portail client, facture/taxe, synchronisation Sheets ou architecture supplémentaire.
+Les listes et le rapport restent simples pour un seul restaurant : pas de pagination et solde d’ouverture calculé en mémoire. Ajouter pagination et agrégats SQL lorsque le volume le justifie. Aucun moteur de tarification, inventaire global, portail client, moteur de taxe ni synchronisation automatique.
 
 Configuration vérifiée avec la documentation officielle [Symfony 7.4 setup](https://symfony.com/doc/7.4/setup.html), [security](https://symfony.com/doc/7.4/security.html) et [forms](https://symfony.com/doc/7.4/forms.html).
+
+
+## Factures fournisseurs
+
+La rubrique **Factures fournisseurs** est séparée du registre clients. Ajouter les fournisseurs avec leur raison sociale, leurs enseignes/alias (un par ligne) et un libellé interne libre. Les alias sont comparés après normalisation des accents, majuscules et espaces ; une correspondance ambiguë impose un choix manuel. Lors de la lecture IA, seuls les noms officiels, alias et IDs de ce catalogue sont transmis avec les photos. La réponse peut choisir un ID existant si les indices du vendeur correspondent, ou laisser le fournisseur non établi ; aucun rapprochement approximatif ni création automatique. Le formulaire affiche le nom officiel enregistré, tout en conservant le nom littéral lu dans les données d’extraction.
+
+- **Saisie manuelle** disponible sans clé API. Choisir le fournisseur et vérifier les champs ; le changement de fournisseur renseigne son nom officiel et son libellé par défaut. Ces deux textes restent modifiables pour le document ; s’ils sont laissés vides, les valeurs du fournisseur enregistré s’appliquent aussi côté serveur.
+- **Photos** : caméra du téléphone ou plusieurs fichiers JPEG/PNG/WebP, maximum 6 fichiers, 8 Mo chacun et 20 Mo au total. Choisir documents distincts (un brouillon par photo) ou pages d’un même document (un seul brouillon). La lecture du premier document intervient pendant l’envoi si OpenAI est configuré ; ouvrir ensuite chaque brouillon et utiliser « Lire avec l’IA ». Aucun appel sur un simple GET, aucune tâche en arrière-plan.
+- **Validation humaine obligatoire** : contrôler raison sociale, date du document (pas l’échéance), référence (pas une référence BL sur une facture), type et TTC. Recopier soi-même le TTC dans un champ toujours vide à l’ouverture, puis cocher la confirmation. Les totaux proposés ne sont jamais autorisés à enregistrer une écriture seuls. Le formulaire conserve les autres champs et les photos lors de la création d’un fournisseur ; le TTC doit être recopié à nouveau.
+- Chaque écriture conserve les noms/libellés, le TTC en centimes entiers, le type, la date, la référence, l’utilisateur et l’instant de validation UTC. Le statut `manual`, `extracted` ou `corrected` conserve l’origine ; une correction du TTC lu est traçable avec sa preuve originale dans le JSON d’extraction, sans image en base. Aucun écran de modification/suppression de l’historique.
+- La référence est facultative. Lorsqu’elle est renseignée, une contrainte PostgreSQL rejette les doublons fournisseur + référence normalisée + type. Sans référence, plusieurs documents sont possibles et les doublons entre eux ne peuvent pas être détectés : vérifier la liste avant validation. Aucun numéro fictif n’est généré. Le jeton unique de brouillon rend la confirmation répétée idempotente. Une erreur conserve le brouillon. Un bon de livraison est affiché/exporté séparément et n’est jamais additionné au total des factures.
+- Le CSV contient uniquement les documents validés, avec filtres de dates inclusifs facultatifs. Les textes sont protégés contre les formules ; la colonne « Centimes MAD » conserve aussi les entiers exacts.
+
+### Lecture facultative OpenAI
+
+Ajouter dans `.env.local` (fichier ignoré) :
+
+```dotenv
+OPENAI_API_KEY=votre-cle-personnelle
+OPENAI_INVOICE_MODEL=gpt-6-luna
+```
+
+Puis appliquer la configuration en recréant **uniquement le service web Organic** :
+
+```sh
+rtk docker compose --env-file .env.local up -d --build web
+rtk docker compose --env-file .env.local exec -T --user www-data web php bin/console cache:clear
+```
+
+Les photos partent vers le point de terminaison fixe OpenAI Responses, avec `store:false`, un schéma JSON strict, un effort de raisonnement `medium`, sans outils et sans conservation demandée via l’API. Les conditions de rétention de l’API restent celles du compte OpenAI : `store:false` n’est pas une garantie de rétention nulle par le fournisseur. Les instructions imprimées sont traitées comme des données. Montants absents/coupés/partiels ou devise inconnue donnent un TTC non établi ; aucune multiplication ni reconstruction de TTC. Les preuves TTC/HT/TVA visibles et les avertissements restent consultables. Une différence HT + TVA / TTC est signalée sans corriger un montant. La validation humaine reste indispensable même si la réponse semble nette. Délai borné à 90 secondes, erreurs réseau/quota/réponse invalide : message générique et saisie manuelle disponible, photos conservées. Ne pas envoyer de document sans être autorisé à le transmettre au fournisseur API.
+
+### Photos privées et nettoyage
+
+Les brouillons vivent uniquement sous `var/invoice-drafts/` (ignoré par Git), répertoires opaques, liés à l’utilisateur **et** à sa session. Les photos sont servies par une route authentifiée contrôlant ces deux liens, jamais sous `public/`. La validation réussie ou « Abandonner » supprime les photos. Les brouillons expirent après 24 h et sont supprimés opportunément lors de l’ouverture de la rubrique ou d’un nouvel envoi.
+
+Pour supprimer aussi les brouillons abandonnés sans nouvelle activité, exécuter régulièrement cette commande (par exemple chaque heure via le planificateur local) :
+
+```sh
+rtk docker compose --env-file .env.local exec -T --user www-data web php bin/console app:invoice-drafts:cleanup
+```
+
+Sans activité ni cette commande, les fichiers expirés restent sur disque mais ne sont plus accessibles dans l’application. Le nettoyage ne touche que les dossiers de brouillons reconnus ; aucun autre fichier `var/` n’est supprimé.
+
+### Envoi manuel Google Sheets
+
+Créer un compte de service Google avec l’API **Google Sheets activée**. Télécharger son JSON de credentials dans `var/google-service-account.json` (ignoré par Git ; ne jamais le committer), puis partager **le classeur choisi** à l’adresse `client_email` de ce compte avec le rôle Éditeur. Le compte de service ne reçoit pas de délégation à votre compte personnel et l’application ne lit pas votre Drive.
+
+```dotenv
+GOOGLE_SHEETS_CREDENTIALS_FILE=/app/var/google-service-account.json
+GOOGLE_SHEETS_SPREADSHEET_ID=identifiant-dans-l-url-du-classeur
+GOOGLE_SHEETS_TAB="Factures fournisseurs"
+```
+
+Le chemin désigne le fichier **dans le conteneur** ; le montage existant `.:/app` suffit. Restreindre localement l’accès au JSON tout en permettant sa lecture par `www-data`, puis recréer le service web avec les commandes précédentes.
+
+Le bouton **Envoyer les documents manquants dans Google Sheets** transmet tous les documents validés ; il ne reprend pas le filtre visuel et n’effectue aucune synchronisation automatique. Le service signe un JWT RS256 avec OpenSSL natif, obtient un token OAuth limité à Sheets et utilise des URLs Google fixes. Il crée l’onglet dédié s’il manque, vérifie ses en-têtes et lit les IDs de la première colonne avant d’ajouter uniquement les entrées absentes. Les écritures utilisent `RAW` : les textes ressemblant à des formules restent du texte. La colonne « Centimes MAD » est un entier numérique exact pour les sommes. Un verrou PostgreSQL local sérialise les envois concurrents. Un nouvel envoi après une réponse perdue relit les IDs, évitant les doublons. Ne pas modifier/supprimer manuellement ces IDs dans cet onglet. Les données locales restent la référence ; aucune importation depuis Sheets. Sans credentials valides, le CSV reste utilisable.
+
+Les tests couvrent l’extraction avec API simulée (TTC littéral, coupure, HT/TVA incohérents, réponse invalide/quota/refus), les contrôles photo, les propriétaires/sessions/CSRF, la confirmation TTC obligatoire, les snapshots, doublons et répétitions, le nettoyage, le CSV sécurisé et Google Sheets `RAW`/idempotent. Un test réel OpenAI ou Google Sheets exige les credentials facultatifs et n’est pas simulé dans l’interface.

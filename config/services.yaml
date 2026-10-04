@@ -1,5 +1,21 @@
+parameters:
+  env(OPENAI_API_KEY): ''
+  env(OPENAI_INVOICE_MODEL): 'gpt-6-luna'
+  env(GOOGLE_SHEETS_CREDENTIALS_FILE): ''
+  env(GOOGLE_SHEETS_SPREADSHEET_ID): ''
+  env(GOOGLE_SHEETS_TAB): 'Factures fournisseurs'
 services:
   _defaults: { autowire: true, autoconfigure: true }
   App\:
     resource: '../src/'
     exclude: '../src/{Entity,Kernel.php}'
+  App\Service\InvoiceSheets:
+    arguments:
+      $credentialsFile: '%env(GOOGLE_SHEETS_CREDENTIALS_FILE)%'
+      $spreadsheetId: '%env(GOOGLE_SHEETS_SPREADSHEET_ID)%'
+      $tabName: '%env(GOOGLE_SHEETS_TAB)%'
+when@test:
+  services:
+    App\Service\InvoiceDrafts:
+      arguments:
+        $root: '%kernel.project_dir%/var/invoice-drafts-test'
