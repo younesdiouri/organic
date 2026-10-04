@@ -83,6 +83,50 @@ final class AssistantDataTest extends KernelTestCase
         finally { $events->removeEventListener(['postLoad'],$listener); }
         self::assertSame([['readonly'=>'on','timeout'=>'3s']],$listener->settings);
         self::assertFalse($this->em->getConnection()->isTransactionActive());
+        $this->em->clear(); $listener->settings=[]; $events->addEventListener(['postLoad'],$listener);
+        try { $this->data->execute('rank_cost_price_ratio',['query'=>'FICTIF','limit'=>1]); }
+        finally { $events->removeEventListener(['postLoad'],$listener); }
+        self::assertSame([['readonly'=>'on','timeout'=>'3s']],$listener->settings);
+        self::assertFalse($this->em->getConnection()->isTransactionActive());
+    }
+    private function ratioDish(string $name, int $cost, int $price, string $pack='1'): Product
+    {
+        $ingredient=new Product(); $ingredient->name='Ingrédient FICTIF '.$name; $ingredient->kind='ingredient'; $ingredient->unit='KG';
+        $offer=new PurchaseOffer(); $offer->product=$ingredient; $offer->priceCents=$cost; $offer->quantity=$pack; $offer->preferred=true; $ingredient->purchaseOffers->add($offer);
+        $dish=new Product(); $dish->name=$name; $dish->priceCents=$price; $dish->recipeComplete=true; $dish->recipeOutputQuantity='1';
+        $line=new RecipeLine(); $line->parent=$dish; $line->component=$ingredient; $dish->recipeLines->add($line);
+        $this->em->persist($ingredient); $this->em->persist($dish); return $dish;
+    }
+    public function testRatiosCompareAllMatchedWrapsWithExactOrderingAndDisjointExclusions(): void
+    {
+        for ($i=0;$i<8;++$i) { $this->ratioDish('WRAP FICTIF '.$i,100,100); }
+        $winner=$this->ratioDish('WRAP FICTIF Z winner',10,100);
+        $alias=$this->ratioDish('FICTIF alias',20,100); $alias->aliases=['WRAP FICTIF alias'];
+        $code=$this->ratioDish('FICTIF référence',30,100); $code->code='WRAP-CODE';
+        $near=$this->ratioDish('WRAP FICTIF nearbetter',33333333,100000000);
+        $tieB=$this->ratioDish('WRAP FICTIF B tie',2,6); $tieA=$this->ratioDish('WRAP FICTIF A tie',1,3);
+        $free=$this->ratioDish('WRAP FICTIF gratuit confirmé',0,100);
+        $hugeB=$this->ratioDish('WRAP FICTIF énorme B',100000000,99999999,'0.000001');
+        $hugeA=$this->ratioDish('WRAP FICTIF énorme A',100000000,100000000,'0.000001');
+        $incomplete=$this->ratioDish('WRAP FICTIF coût manquant',1,100); $incomplete->recipeComplete=false;
+        $this->ratioDish('WRAP FICTIF prix nul',1,0);
+        $both=$this->ratioDish('WRAP FICTIF coût manquant et prix nul',1,0); $both->recipeComplete=false;
+        $archived=$this->ratioDish('WRAP FICTIF archivé',0,100); $archived->active=false;
+        $this->ratioDish('FICTIF salade',0,100);
+        $this->em->flush(); $this->em->clear();
+        $result=$this->data->execute('rank_cost_price_ratio',['query'=>'wRaP','limit'=>3]); $data=$result['data'];
+        self::assertSame(20,$data['eligible']); self::assertSame(17,$data['ranked_count']);
+        self::assertSame(2,$data['excluded_incomplete_costs']); self::assertSame(1,$data['excluded_zero_sale_prices']);
+        self::assertSame([$free->id,$winner->id,$alias->id],array_column($data['dishes'],'id'));
+        self::assertSame('10.00',$data['dishes'][1]['ratio_percent']); self::assertSame('10,00 %',$data['dishes'][1]['ratio_percent_display']);
+        self::assertSame('0,10',$data['dishes'][1]['material_cost_mad']); self::assertSame('1,00',$data['dishes'][1]['sale_price_mad']);
+        self::assertSame([$free->id,$winner->id,$alias->id],array_map(fn($s) => $s['parameters']['id'],$result['sources']));
+        $all=$this->data->execute('rank_cost_price_ratio',['query'=>'wrap','limit'=>20])['data']['dishes'];
+        self::assertSame([$code->id,$near->id,$tieA->id,$tieB->id],array_column(array_slice($all,3,4),'id'));
+        self::assertSame(['33.33','33.33','33.33'],array_column(array_slice($all,4,3),'ratio_percent'),'Display rounding must not determine ordering.');
+        self::assertSame([$hugeA->id,$hugeB->id],array_column(array_slice($all,-2),'id'),'Products crossed during sorting exceed PHP_INT_MAX.');
+        self::assertSame('100000000.00',$all[count($all)-2]['ratio_percent']);
+        self::assertSame(0,$this->data->execute('rank_cost_price_ratio',['query'=>'absent','limit'=>1])['data']['eligible']);
     }
     public function testRejectsExtraFieldsTypesDatesWriteToolsAndExistingTransactions(): void
     {

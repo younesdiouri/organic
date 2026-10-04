@@ -18,6 +18,7 @@ final class AssistantData
             'find_articles'=>['Chercher les articles par nom, référence et alias, archivés inclus. kind=all pour tous les types.', ['query'=>$query, 'kind'=>['type'=>'string','enum'=>['all','ingredient','preparation','dish','packaging']], 'limit'=>$limit]],
             'article_detail'=>['Fiche article, recettes imbriquées, quantité finale du lot, coûts exacts calculés par l’application et tarifs fournisseurs. Composition bornée, troncature signalée.', ['id'=>$id]],
             'rank_dishes'=>['Classer les plats et boissons actifs vendables par coût matière HT unitaire ou prix de vente par PC/PORTION. Les coûts incomplets sont exclus et comptés.', ['metric'=>['type'=>'string','enum'=>['material_cost','sale_price']], 'limit'=>$limit]],
+            'rank_cost_price_ratio'=>['Comparer directement TOUS les plats actifs vendables PC/PORTION dont nom, référence ou alias contient query (exemple wrap). Classer coût matière HT unitaire / prix de vente croissant : le plus faible ratio est le meilleur. Exclure et compter séparément coûts incomplets et prix de vente nuls ; aucun article_detail nécessaire. query vide pour tous les plats.', ['query'=>$query, 'limit'=>$limit]],
             'delivered_products'=>['Classer les produits par quantités livrées BRUTES sur une période inclusive. Les retours datés dans la période sont indiqués séparément, même pour une livraison antérieure.', ['start'=>$date, 'end'=>$date, 'limit'=>$limit]],
             'find_clients'=>['Chercher les clients par nom uniquement, sans coordonnées.', ['query'=>$query, 'limit'=>$limit]],
             'client_report'=>['Activité d’un client sur une période inclusive et solde cumulé à la fin. Les retours/paiements ont un montant négatif ; solde positif = restant dû, négatif = crédit client.', ['id'=>$id, 'start'=>$date, 'end'=>$date]],
@@ -54,6 +55,7 @@ final class AssistantData
                 'find_articles'=>$this->articles($arguments),
                 'article_detail'=>$this->detail($arguments['id']),
                 'rank_dishes'=>$this->ranking($arguments),
+                'rank_cost_price_ratio'=>$this->ratios($arguments),
                 'delivered_products'=>$this->delivered($arguments),
                 'find_clients'=>$this->clients($arguments),
                 'client_report'=>$this->report($arguments),
@@ -133,6 +135,25 @@ final class AssistantData
         usort($rows, fn($a,$b) => ($b['rank_value_cents']<=>$a['rank_value_cents']) ?: strcmp($a['name'],$b['name']) ?: ($a['id']<=>$b['id']));
         $rows = array_slice($rows, 0, $a['limit']);
         return ['data'=>['metric'=>$a['metric'], 'basis'=>'par pièce ou portion ; coût matière HT', 'eligible'=>$eligible, 'incomplete_costs'=>$incomplete, 'excluded_incomplete_costs'=>$a['metric']==='material_cost' ? $incomplete : 0, 'dishes'=>$rows], 'sources'=>array_map(fn($r) => $this->source('product_show',$r['id'],$r['name']), $rows)];
+    }
+    private function ratios(array $a): array
+    {
+        $rows = []; $eligible = 0; $incomplete = 0; $zeroPrice = 0; $query = trim($a['query']);
+        foreach ($this->products() as $p) {
+            if (!$p->active || !$p->sellable || $p->kind!=='dish' || !in_array($p->unit, ['PC','PORTION'], true)) { continue; }
+            if ($query!=='' && !array_any([$p->name, $p->code ?? '', ...$p->aliases], fn($name) => mb_stripos($name, $query)!==false)) { continue; }
+            ++$eligible;
+            $cost = $this->cost->calculate($p);
+            // Mutually exclusive exclusions: an incomplete cost is counted first, even if its sale price is zero.
+            if (!$cost['complete'] || $cost['unitCents']===null) { ++$incomplete; continue; }
+            if ($p->priceCents<=0) { ++$zeroPrice; continue; }
+            $percent = bcadd(bcdiv(bcmul((string)$cost['unitCents'],'100',0),(string)$p->priceCents,4),'0.005',2);
+            $rows[] = $this->article($p)+['material_cost_cents'=>$cost['unitCents'], 'material_cost_mad'=>Money::format($cost['unitCents']), 'ratio_percent'=>$percent, 'ratio_percent_display'=>str_replace('.',',',$percent).' %'];
+        }
+        // Compare the integer-cent ratios exactly, before rounding their percentage for display; BCMath avoids integer overflow.
+        usort($rows, fn($a,$b) => bccomp(bcmul((string)$a['material_cost_cents'],(string)$b['sale_price_cents'],0),bcmul((string)$b['material_cost_cents'],(string)$a['sale_price_cents'],0),0) ?: strcmp($a['name'],$b['name']) ?: ($a['id']<=>$b['id']));
+        $ranked = count($rows); $rows = array_slice($rows,0,$a['limit']);
+        return ['data'=>['query'=>$query, 'basis'=>'Coût matière HT unitaire en centimes / prix de vente courant par pièce ou portion. Ratio le plus faible en premier ; pourcentage affiché arrondi à 2 décimales. Ce ratio ne mesure pas la rentabilité complète.', 'eligible'=>$eligible, 'excluded_incomplete_costs'=>$incomplete, 'excluded_zero_sale_prices'=>$zeroPrice, 'ranked_count'=>$ranked, 'dishes'=>$rows], 'sources'=>array_map(fn($r) => $this->source('product_show',$r['id'],$r['name']),$rows)];
     }
     private function delivered(array $a): array
     {
