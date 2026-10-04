@@ -5,6 +5,7 @@ parameters:
   env(INVOICE_DRAFTS_DIR): '%kernel.project_dir%/var/invoice-drafts'
   env(OPENAI_API_KEY): ''
   env(OPENAI_INVOICE_MODEL): 'gpt-6-luna'
+  env(OPENAI_ASSISTANT_MODEL): 'gpt-6-luna'
   env(GOOGLE_SHEETS_CREDENTIALS_FILE): ''
   env(GOOGLE_SHEETS_SPREADSHEET_ID): ''
   env(GOOGLE_SHEETS_TAB): 'Factures fournisseurs'

@@ -23,6 +23,7 @@
                         <a class="text-white" href="{{ path('deliveries') }}">Livraisons</a>
                         <a class="text-white" href="{{ path('payments') }}">Paiements</a>
                         <a class="text-white" href="{{ path('invoices') }}">Factures fournisseurs</a>
+                        <a class="text-white" href="{{ path('assistant') }}">Assistant</a>
                     </div>
                     <form action="{{ path('logout') }}" method="post">
                         <input type="hidden" name="_csrf_token" value="{{ csrf_token('logout') }}">

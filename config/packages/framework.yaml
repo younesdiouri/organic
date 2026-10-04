@@ -15,6 +15,11 @@ framework:
   handle_all_throwables: true
   cache:
     directory: '%env(APP_CACHE_DIR)%'
+  rate_limiter:
+    assistant:
+      policy: sliding_window
+      limit: 12
+      interval: '10 minutes'
 when@test:
   framework:
     test: true
