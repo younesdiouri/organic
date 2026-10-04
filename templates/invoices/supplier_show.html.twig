@@ -1,0 +1,15 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+<a href="{{ path('suppliers', {draft:draftToken}) }}">← Fournisseurs</a>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 my-3"><h1 class="mb-0">{{ supplier.name }}</h1><a class="btn btn-outline-success" href="{{ path('supplier_edit', {id:supplier.id, draft:draftToken}) }}">Modifier le fournisseur</a></div>
+{% if supplier.aliases %}<p>Alias : {{ supplier.aliases|join(', ') }}</p>{% endif %}
+<p>Libellé interne : {{ supplier.reportingLabel ?: 'Non renseigné' }}</p>
+<h2 class="h4">{{ rows|length }} article{{ rows|length != 1 ? 's' }} lié{{ rows|length != 1 ? 's' }}</h2>
+<p class="text-secondary">Tous les tarifs de ce fournisseur, préférés ou secondaires. Articles archivés inclus.</p>
+<div class="card table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Article</th><th>Type / unité</th><th>Tarifs d’achat HT</th></tr></thead><tbody>
+{% for row in rows %}<tr><td><a href="{{ path('product_show', {id:row.product.id}) }}"><strong>{{ row.product.name }}</strong></a>{% if row.product.code %}<small class="d-block">{{ row.product.code }}</small>{% endif %}<small class="d-block text-secondary">{{ row.product.category }}</small>{% if not row.product.active %}<span class="badge text-bg-secondary">Archivé</span>{% endif %}</td>
+<td>{{ kinds|filter(v => v == row.product.kind)|keys|first }}<small class="d-block">{{ row.product.unit }}</small></td>
+<td>{% for offer in row.offers %}<div class="{{ not loop.last ? 'border-bottom pb-3 mb-3' }}"><div><strong>{{ offer.priceCents|mad }} HT</strong> / {{ offer.quantity|quantity }} {{ offer.unit }} {% if offer.preferred %}<span class="badge text-bg-success">Préféré</span>{% endif %}</div><div>Rendement utilisable : {{ offer.usableYield|quantity }}</div>{% if offer.notes %}<p class="mb-1 text-break">{{ offer.notes }}</p>{% endif %}<a href="{{ path('purchase_offer_edit', {id:row.product.id, offerId:offer.id}) }}#achats">Modifier ce tarif</a></div>{% endfor %}</td></tr>
+{% else %}<tr><td colspan="3" class="p-4">Aucun article lié à ce fournisseur. Renseignez ce fournisseur dans les tarifs d’achat du catalogue.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

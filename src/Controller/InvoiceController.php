@@ -1,6 +1,6 @@
 <?php
 namespace App\Controller;
-use App\Entity\Supplier;
+use App\Entity\{Supplier, PurchaseOffer};
 use App\Service\{InvoiceDrafts, InvoiceExtractor, InvoiceLedger, InvoiceSheets, Money, Catalogue};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
@@ -88,7 +88,25 @@ final class InvoiceController extends AbstractController
                 return $this->redirectToRoute('suppliers');
             } catch (\InvalidArgumentException $e) { $form->addError(new FormError($e->getMessage())); }
         }
-        return $this->render('invoices/suppliers.html.twig', ['form'=>$form, 'rows'=>$this->em->getRepository(Supplier::class)->findBy([], ['name'=>'ASC']), 'draftToken'=>$request->query->get('draft')], new Response(status: $form->isSubmitted() ? 422 : 200));
+        $query = trim($request->query->getString('q'));
+        $rows = array_filter($this->em->getRepository(Supplier::class)->findBy([], ['name'=>'ASC']), fn(Supplier $row) => $query === '' || str_contains(Supplier::normalize($row->name.' '.implode(' ', $row->aliases).' '.$row->reportingLabel), Supplier::normalize($query)));
+        $counts = $this->em->getConnection()->fetchAllKeyValue('SELECT supplier_id, COUNT(DISTINCT product_id) FROM purchase_offer WHERE supplier_id IS NOT NULL GROUP BY supplier_id');
+        return $this->render('invoices/suppliers.html.twig', ['form'=>$form, 'rows'=>$rows, 'counts'=>$counts, 'query'=>$query, 'editing'=>$id !== null, 'draftToken'=>$request->query->getString('draft') ?: null], new Response(status: $form->isSubmitted() ? 422 : 200));
+    }
+    // Attribute routes and joined queries: https://symfony.com/doc/8.1/routing.html and /doctrine.html.
+    #[Route('/fournisseurs/{id}', name: 'supplier_show', requirements: ['id'=>'\d+'], methods: ['GET'])]
+    public function supplierShow(Request $request, int $id): Response
+    {
+        $supplier = $this->em->find(Supplier::class, $id);
+        if (!$supplier) { throw $this->createNotFoundException(); }
+        $offers = $this->em->createQueryBuilder()->select('o', 'p')->from(PurchaseOffer::class, 'o')->join('o.product', 'p')
+            ->where('o.supplier = :supplier')->setParameter('supplier', $supplier)->orderBy('p.name', 'ASC')->addOrderBy('o.id', 'ASC')->getQuery()->getResult();
+        $rows = [];
+        foreach ($offers as $offer) {
+            $rows[$offer->product->id]['product'] = $offer->product;
+            $rows[$offer->product->id]['offers'][] = $offer;
+        }
+        return $this->render('invoices/supplier_show.html.twig', ['supplier'=>$supplier, 'rows'=>$rows, 'kinds'=>Catalogue::KINDS, 'draftToken'=>$request->query->getString('draft') ?: null]);
     }
     #[Route('/factures-fournisseurs/brouillon/{token}', name: 'invoice_draft', requirements: ['token'=>'[a-f0-9]{64}'], methods: ['GET', 'POST'])]
     public function draft(Request $request, string $token): Response
