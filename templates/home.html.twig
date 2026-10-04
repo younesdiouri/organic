@@ -18,7 +18,7 @@
                         <li class="dashboard-empty">Aucun coût complet à afficher. Complétez les recettes et les tarifs d’achat dans le catalogue.</li>
                     {% endfor %}
                 </ol>
-                <p class="dashboard-note">{{ dashboard.computed }} coûts calculés sur {{ dashboard.eligible }} produits éligibles · {{ dashboard.incomplete }} incomplets, exclus du classement.</p>
+                <p class="dashboard-note">{{ dashboard.computed }} coûts calculés sur {{ dashboard.eligible }} produits éligibles · {{ dashboard.incomplete }} incomplets, exclus du classement. <a href="{{ path('catalogue_completion') }}">Compléter le catalogue</a>.</p>
             </section>
         </div>
         <div class="col-lg-6">

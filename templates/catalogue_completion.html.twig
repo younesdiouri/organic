@@ -1,0 +1,20 @@
+{% extends 'base.html.twig' %}
+{% block body %}
+<a href="{{ path('products') }}">← Catalogue</a>
+<h1>Articles à compléter</h1>
+<p>{{ total }} article{{ total != 1 ? 's' }} actif{{ total != 1 ? 's' }} avec des informations à renseigner ou vérifier. Les composants manquants peuvent aussi bloquer le coût des recettes qui les utilisent.</p>
+<form method="get" class="card p-3 mb-4">
+<div class="row g-3 align-items-end">
+<div class="col-lg-7"><label for="q" class="form-label">Rechercher</label><input id="q" name="q" class="form-control" value="{{ query }}" placeholder="Nom, référence ou alias"></div>
+<div class="col-lg-3"><label for="kind" class="form-label">Type</label><select id="kind" name="kind" class="form-select"><option value="">Tous</option>{% for label,value in kinds %}<option value="{{ value }}" {{ kind == value ? 'selected' }}>{{ label }}</option>{% endfor %}</select></div>
+<div class="col-lg-2"><button class="btn btn-outline-success w-100">Filtrer</button></div>
+</div></form>
+<p class="text-secondary">{{ rows|length }} article{{ rows|length != 1 ? 's' }} affiché{{ rows|length != 1 ? 's' }} · les corrections directes précèdent les recettes bloquées par leurs composants.</p>
+<div class="card table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Article</th><th>Type</th><th>Informations à compléter</th><th>Action</th></tr></thead><tbody>
+{% for row in rows %}<tr><td><a href="{{ path('product_complete',{id:row.product.id}) }}"><strong>{{ row.product.name }}</strong></a>{% if row.product.code %}<small class="d-block">{{ row.product.code }}</small>{% endif %}<small class="d-block text-secondary">{{ row.product.category }} · {{ row.product.unit }}</small></td>
+<td>{{ kinds|filter(v => v == row.product.kind)|keys|first }}</td>
+<td><ul class="mb-0 ps-3">{% for issue in row.issues %}<li><a href="{{ path(issue.route,issue.parameters) }}#{{ issue.section }}">{{ issue.label }}</a></li>{% endfor %}</ul></td>
+<td><a class="btn btn-success text-nowrap" href="{{ path('product_complete',{id:row.product.id}) }}">Compléter</a></td></tr>
+{% else %}<tr><td colspan="4" class="p-4">{{ total == 0 ? 'Tous les articles actifs sont complets.' : 'Aucun article ne correspond aux filtres.' }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

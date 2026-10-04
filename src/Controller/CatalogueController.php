@@ -3,7 +3,7 @@ namespace App\Controller;
 
 use App\Entity\{Client, Product, RecipeLine, PurchaseOffer, Supplier};
 use App\Form\PriceType;
-use App\Service\{Money, Catalogue, RecipeCost, Quantity};
+use App\Service\{Money, Catalogue, RecipeCost, Quantity, CatalogueCompletion};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\{TextType, TextareaType, CheckboxType, ChoiceType};
@@ -15,7 +15,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 final class CatalogueController extends AbstractController
 {
-    public function __construct(private EntityManagerInterface $em, private Catalogue $catalogue, private RecipeCost $cost) {}
+    public function __construct(private EntityManagerInterface $em, private Catalogue $catalogue, private RecipeCost $cost, private CatalogueCompletion $completion) {}
 
     #[Route('/clients', name: 'clients', methods: ['GET', 'POST'])]
     #[Route('/clients/{id}/modifier', name: 'client_edit', requirements: ['id'=>'\d+'], methods: ['GET', 'POST'])]
@@ -43,6 +43,7 @@ final class CatalogueController extends AbstractController
     #[Route('/catalogue/{id}/modifier', name: 'product_edit', requirements: ['id'=>'\d+'], methods: ['GET', 'POST'])]
     public function products(Request $request, ?int $id = null): Response
     {
+        $completionMode = $id !== null && $request->query->getString('completion') === '1';
         $product = $id ? $this->em->find(Product::class, $id) : new Product();
         if (!$product) { throw $this->createNotFoundException(); }
         $form = $this->createFormBuilder(['name'=>$product->name, 'price'=>Money::format($product->priceCents), 'code'=>$product->code, 'kind'=>$product->kind, 'category'=>$product->category, 'aliases'=>implode("\n", $product->aliases), 'unit'=>$product->unit, 'sellable'=>$product->sellable, 'forDelivery'=>$product->forDelivery, 'active'=>$product->active, 'notes'=>$product->notes, 'knownZeroCost'=>$product->knownZeroCost])
@@ -63,21 +64,34 @@ final class CatalogueController extends AbstractController
             try {
                 $this->catalogue->saveProduct($product, $form->getData());
                 $this->addFlash('success', 'Article enregistré. Les livraisons précédentes sont conservées.');
-                return $this->redirectToRoute('products');
+                return $this->redirectToRoute($completionMode ? 'product_complete' : 'products', $completionMode ? ['id'=>$id] : []);
             } catch (\InvalidArgumentException $e) { $form->addError(new FormError($e->getMessage())); }
         }
         $query = trim($request->query->getString('q')); $kind = $request->query->getString('kind'); $delivery = $request->query->getString('delivery');
         $rows = array_filter($this->em->getRepository(Product::class)->findBy([], ['name'=>'ASC']), fn(Product $row) =>
             ($kind === '' || $row->kind === $kind) && ($delivery === '' || ($delivery === '1' ? $row->deliveryAvailable() : !$row->deliveryAvailable())) &&
             ($query === '' || str_contains(Catalogue::normalize($row->name.' '.($row->code ?? '').' '.implode(' ', $row->aliases)), Catalogue::normalize($query))));
-        return $this->render('products.html.twig', ['form'=>$form, 'editing'=>$id !== null, 'product'=>$product, 'rows'=>$rows, 'kinds'=>Catalogue::KINDS, 'query'=>$query, 'kind'=>$kind, 'delivery'=>$delivery], new Response(status: $form->isSubmitted() ? 422 : 200));
+        return $this->render('products.html.twig', ['form'=>$form, 'editing'=>$id !== null, 'product'=>$product, 'rows'=>$rows, 'kinds'=>Catalogue::KINDS, 'query'=>$query, 'kind'=>$kind, 'delivery'=>$delivery, 'completionMode'=>$completionMode], new Response(status: $form->isSubmitted() ? 422 : 200));
     }
 
+    #[Route('/catalogue/a-completer', name: 'catalogue_completion', methods: ['GET'])]
+    public function completion(Request $request): Response
+    {
+        $all = $this->completion->rows();
+        $query = trim($request->query->getString('q')); $kind = $request->query->getString('kind');
+        $rows = array_filter($all, fn($row) => ($kind === '' || $row['product']->kind === $kind) &&
+            ($query === '' || str_contains(Catalogue::normalize($row['product']->name.' '.($row['product']->code ?? '').' '.implode(' ', $row['product']->aliases)), Catalogue::normalize($query))));
+        return $this->render('catalogue_completion.html.twig', ['rows'=>$rows, 'total'=>count($all), 'query'=>$query, 'kind'=>$kind, 'kinds'=>Catalogue::KINDS]);
+    }
+
+    // Native routes and named forms: https://symfony.com/doc/8.1/routing.html and /forms.html.
+    #[Route('/catalogue/a-completer/{id}', name: 'product_complete', requirements: ['id'=>'\d+'], methods: ['GET','POST'])]
     #[Route('/catalogue/{id}/fiche', name: 'product_show', requirements: ['id'=>'\d+'], methods: ['GET','POST'])]
     #[Route('/catalogue/{id}/composition/{lineId}/modifier', name: 'recipe_line_edit', requirements: ['id'=>'\d+','lineId'=>'\d+'], methods: ['GET','POST'])]
     #[Route('/catalogue/{id}/achat/{offerId}/modifier', name: 'purchase_offer_edit', requirements: ['id'=>'\d+','offerId'=>'\d+'], methods: ['GET','POST'])]
     public function show(Request $request, int $id, ?int $lineId = null, ?int $offerId = null): Response
     {
+        $completionMode = $request->attributes->get('_route') === 'product_complete' || $request->query->getString('completion') === '1';
         $product = $this->em->find(Product::class, $id);
         if (!$product) { throw $this->createNotFoundException(); }
         $line = $lineId ? $this->em->find(RecipeLine::class, $lineId) : new RecipeLine();
@@ -104,12 +118,12 @@ final class CatalogueController extends AbstractController
             ->add('notes', TextareaType::class, ['label'=>'Notes / source du tarif', 'required'=>false, 'constraints'=>[new Assert\Length(max: 10000)]])->getForm()->handleRequest($request);
         foreach ([[$recipe, fn($d) => $this->catalogue->saveRecipe($product,$d)], [$component, fn($d) => $this->catalogue->saveLine($product,$line,$d)], [$purchase, fn($d) => $this->catalogue->saveOffer($product,$offer,$d)]] as [$form,$save]) {
             if ($form->isSubmitted() && $form->isValid()) {
-                try { $save($form->getData()); $this->addFlash('success','Fiche enregistrée.'); return $this->redirectToRoute('product_show',['id'=>$id]); }
+                try { $save($form->getData()); $this->addFlash('success','Fiche enregistrée.'); return $this->redirectToRoute($completionMode ? 'product_complete' : 'product_show',['id'=>$id]); }
                 catch (\InvalidArgumentException $e) { $form->addError(new FormError($e->getMessage())); }
             }
         }
         $usedIn = $this->em->getRepository(RecipeLine::class)->findBy(['component'=>$product]);
-        return $this->render('product_show.html.twig', ['product'=>$product, 'recipe'=>$recipe, 'component'=>$component, 'offer'=>$purchase, 'lineEditing'=>$lineId !== null, 'offerEditing'=>$offerId !== null, 'cost'=>$this->cost->calculate($product), 'usedIn'=>$usedIn], new Response(status: $request->isMethod('POST') ? 422 : 200));
+        return $this->render('product_show.html.twig', ['product'=>$product, 'recipe'=>$recipe, 'component'=>$component, 'offer'=>$purchase, 'lineEditing'=>$lineId !== null, 'offerEditing'=>$offerId !== null, 'cost'=>$this->cost->calculate($product), 'usedIn'=>$usedIn, 'completionMode'=>$completionMode, 'issues'=>$completionMode ? $this->completion->issues($product) : []], new Response(status: $request->isMethod('POST') ? 422 : 200));
     }
     #[Route('/catalogue/{id}/composition/{lineId}/retirer', name: 'recipe_line_remove', requirements: ['id'=>'\d+','lineId'=>'\d+'], methods: ['POST'])]
     public function removeLine(Request $request, int $id, int $lineId): Response { return $this->removeRow($request, $id, RecipeLine::class, $lineId, 'remove_line_'); }
@@ -121,6 +135,6 @@ final class CatalogueController extends AbstractController
         if (!$row || ($row instanceof RecipeLine ? $row->parent->id : $row->product->id) !== $productId) { throw $this->createNotFoundException(); }
         if (!$this->isCsrfTokenValid($token.$rowId, $request->request->getString('_token'))) { throw $this->createAccessDeniedException('CSRF invalide.'); }
         $this->catalogue->remove($row);
-        return $this->redirectToRoute('product_show', ['id'=>$productId]);
+        return $this->redirectToRoute($request->query->getString('completion') === '1' ? 'product_complete' : 'product_show', ['id'=>$productId]);
     }
 }
