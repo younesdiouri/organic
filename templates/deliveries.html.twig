@@ -10,6 +10,9 @@
                 <tr>
                     <th>Date</th>
                     <th>Client</th>
+                    <th>Brut</th>
+                    <th>Remise</th>
+                    <th>Net</th>
                     <th>Détail</th>
                 </tr>
             </thead>
@@ -17,14 +20,17 @@
                 {% for row in rows %}
                     <tr>
                         <td>{{ row.date|date('d/m/Y') }}</td>
-                        <td>{{ row.client.name }}</td>
+                        <td>{{ row.client_name }}</td>
+                        <td class="money">{{ row.gross_cents|mad }}</td>
+                        <td class="money">{{ row.discount_cents|mad }}</td>
+                        <td class="money">{{ (row.gross_cents - row.discount_cents)|mad }}</td>
                         <td>
                             <a href="{{ path('delivery_show', {id:row.id}) }}">Livraison #{{ row.id }} et retours</a>
                         </td>
                     </tr>
                 {% else %}
                     <tr>
-                        <td colspan="3">Aucune livraison.</td>
+                        <td colspan="6">Aucune livraison.</td>
                     </tr>
                 {% endfor %}
             </tbody>

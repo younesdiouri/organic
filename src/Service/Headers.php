@@ -1,7 +1,10 @@
 <?php
+
 namespace App\Service;
+
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
+
 #[AsEventListener(event: 'kernel.response')]
 final class Headers
 {

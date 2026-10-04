@@ -4,6 +4,7 @@
 /.env.*.local
 /.env.local.php
 /.phpunit.cache/
+/.php-cs-fixer.cache
 /config/reference.php
 /node_modules/
 /.idea/

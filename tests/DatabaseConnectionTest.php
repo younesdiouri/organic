@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Tests;
 
 use Doctrine\DBAL\Connection;
@@ -13,6 +14,7 @@ final class DatabaseConnectionTest extends KernelTestCase
         $originalServer = $_SERVER['DATABASE_URL'] ?? null;
         $dsn = 'postgresql://organic:organic_local_only@db:5432/organic_test';
         $_ENV['DATABASE_URL'] = $_SERVER['DATABASE_URL'] = $dsn;
+
         try {
             self::bootKernel();
             $connection = self::getContainer()->get(Connection::class);
@@ -25,8 +27,12 @@ final class DatabaseConnectionTest extends KernelTestCase
         } finally {
             self::ensureKernelShutdown();
             $_ENV['DATABASE_URL'] = $originalEnv;
-            if ($originalServer === null) { unset($_SERVER['DATABASE_URL']); }
-            else { $_SERVER['DATABASE_URL'] = $originalServer; }
+
+            if (null === $originalServer) {
+                unset($_SERVER['DATABASE_URL']);
+            } else {
+                $_SERVER['DATABASE_URL'] = $originalServer;
+            }
         }
     }
 }

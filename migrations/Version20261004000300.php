@@ -1,4 +1,5 @@
 <?php
+
 namespace DoctrineMigrations;
 
 use Doctrine\DBAL\Schema\Schema;
@@ -6,7 +7,10 @@ use Doctrine\Migrations\AbstractMigration;
 
 final class Version20261004000300 extends AbstractMigration
 {
-    public function getDescription(): string { return 'Restrict business tables to the backend; deny Supabase browser API access.'; }
+    public function getDescription(): string
+    {
+        return 'Restrict business tables to the backend; deny Supabase browser API access.';
+    }
 
     public function up(Schema $schema): void
     {

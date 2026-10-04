@@ -1,10 +1,17 @@
 <?php
+
 namespace DoctrineMigrations;
+
 use Doctrine\DBAL\Schema\Schema;
 use Doctrine\Migrations\AbstractMigration;
+
 final class Version20261004000400 extends AbstractMigration
 {
-    public function getDescription(): string { return 'Reusable catalogue articles, compositions and supplier offers.'; }
+    public function getDescription(): string
+    {
+        return 'Reusable catalogue articles, compositions and supplier offers.';
+    }
+
     public function up(Schema $schema): void
     {
         $this->addSql("ALTER TABLE product ADD code VARCHAR(100) DEFAULT NULL, ADD kind VARCHAR(20) NOT NULL DEFAULT 'dish', ADD category VARCHAR(120) NOT NULL DEFAULT '', ADD aliases JSON NOT NULL DEFAULT '[]', ADD unit VARCHAR(10) NOT NULL DEFAULT 'PORTION', ADD sellable BOOLEAN NOT NULL DEFAULT TRUE, ADD for_delivery BOOLEAN NOT NULL DEFAULT TRUE, ADD active BOOLEAN NOT NULL DEFAULT TRUE, ADD notes TEXT NOT NULL DEFAULT '', ADD recipe_output_quantity NUMERIC(18,6) DEFAULT NULL, ADD recipe_complete BOOLEAN NOT NULL DEFAULT FALSE, ADD recipe_notes TEXT NOT NULL DEFAULT '', ADD source JSON NOT NULL DEFAULT '[]'");
@@ -17,6 +24,7 @@ final class Version20261004000400 extends AbstractMigration
         $this->addSql('CREATE INDEX IDX_OFFER_PRODUCT ON purchase_offer (product_id)');
         $this->addSql('CREATE INDEX IDX_OFFER_SUPPLIER ON purchase_offer (supplier_id)');
         $this->addSql('CREATE UNIQUE INDEX purchase_offer_preferred ON purchase_offer (product_id) WHERE preferred = TRUE');
+
         foreach (['recipe_line', 'purchase_offer'] as $table) {
             $this->addSql('ALTER TABLE public.'.$table.' ENABLE ROW LEVEL SECURITY');
             $this->addSql('REVOKE ALL ON TABLE public.'.$table.' FROM PUBLIC');
@@ -36,6 +44,7 @@ END
 SQL);
         }
     }
+
     public function down(Schema $schema): void
     {
         $this->addSql('DROP TABLE recipe_line');

@@ -52,6 +52,15 @@ Toutes les routes métier exigent `ROLE_ADMIN`. Login, logout et formulaires de 
 
 ## Vérifier
 
+PHP CS Fixer applique les conventions Symfony, développe les corps de méthodes et blocs de contrôle et ajoute des lignes vides avant les retours et les instructions de contrôle. PHPStan analyse tout le PHP du projet au niveau 5, avec les extensions Symfony et Doctrine, sans baseline ni erreurs ignorées. Les caches restent ignorés dans Git. Sources : [configuration PHP CS Fixer](https://cs.symfony.com/doc/config.html), [espacement des instructions](https://cs.symfony.com/doc/rules/whitespace/blank_line_before_statement.html), [PHPStan](https://phpstan.org/user-guide/getting-started), [extension Symfony](https://github.com/phpstan/phpstan-symfony) et [extension Doctrine](https://github.com/phpstan/phpstan-doctrine).
+
+```sh
+rtk proxy docker compose --env-file .env.local exec -T web composer cs:fix
+rtk proxy docker compose --env-file .env.local exec -T web composer quality
+```
+
+`cs:check` vérifie le format sans modifier les fichiers ; `phpstan` lance uniquement l’analyse statique. `quality` exécute les deux vérifications.
+
 ```sh
 rtk proxy ./bin/test
 rtk docker compose --env-file .env.local exec -T web composer validate --strict
@@ -76,6 +85,25 @@ rtk docker compose --env-file .env.local stop
 ```
 
 Les listes et le rapport restent simples pour un seul restaurant : pas de pagination et solde d’ouverture calculé en mémoire. Ajouter pagination et agrégats SQL lorsque le volume le justifie. Aucun moteur de tarification, inventaire global, portail client, moteur de taxe ni synchronisation automatique.
+
+## Import de livraisons historiques
+
+`app:delivery:import` prévisualise un manifeste JSON privé ; `--apply` crée atomiquement le client, la livraison et ses lignes. Les articles sont résolus par nom ou alias dans la base cible, sans identifiants locaux. Ils doivent être actifs et vendables ; leur disponibilité actuelle en livraison et leur prix catalogue restent inchangés. Les prix du manifeste sont conservés dans l’historique. La remise fixe réduit le brut sans représenter un paiement.
+
+Conserver le manifeste hors Git et hors des couches de construction Docker. Exemple entièrement fictif (centimes entiers MAD) :
+
+```json
+{"version":1,"reference":"FICTIF-DEPOT-2026-01","client":"Client FICTIF","date":"2026-01-01","items":[{"product":"Article FICTIF","quantity":3,"unit_price_cents":1234}],"discount_cents":555,"gross_cents":3702,"net_cents":3147}
+```
+
+Après avoir rendu le fichier privé accessible au conteneur, lancer l’aperçu puis appliquer :
+
+```sh
+rtk docker compose --env-file .env.local exec -T --user www-data web php bin/console app:delivery:import /tmp/livraison-privee.json
+rtk docker compose --env-file .env.local exec -T --user www-data web php bin/console app:delivery:import /tmp/livraison-privee.json --apply
+```
+
+La référence métier doit rester stable au rejeu : une livraison identique renvoie `already_imported`, sans doublon. Une unique livraison existante sans référence, de même client/date/lignes/remise, peut être adoptée (`already_existing` en aperçu, `adopted` après application) sans recréer ses lignes. Toute différence ou ambiguïté bloque l’import et préserve les saisies manuelles. Le fichier accepte de 1 à 100 lignes, des quantités de 1 à 100 000, une date du 01/01/2000 à aujourd’hui et des totaux brut/net exacts. Références : [Console Symfony 8.1](https://symfony.com/doc/8.1/console.html) et [Doctrine Symfony 8.1](https://symfony.com/doc/8.1/doctrine.html).
 
 Configuration vérifiée avec la documentation officielle [Symfony 8.1 setup](https://symfony.com/doc/8.1/setup.html), [security](https://symfony.com/doc/8.1/security.html) et [forms](https://symfony.com/doc/8.1/forms.html). Symfony 8.1 est une version stable à support court, maintenue jusqu’en janvier 2027 ; prévoir sa prochaine mise à jour avant cette échéance. DoctrineBundle 3 utilise les objets paresseux natifs de PHP 8.4 ; les anciennes options de génération de proxies ont été supprimées.
 

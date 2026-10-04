@@ -33,11 +33,12 @@
             {% endfor %}
         </div>
         <div class="card p-3 mb-4">
+            <p>Total livré net de la période (après remises, avant retours) : <strong class="money">{{ (report.totals.Livraison + report.totals.Remise)|mad }}</strong></p>
             <p>Solde avant la période : <strong class="money">{{ report.opening|mad }}</strong>
             </p>
             <p class="mb-0">Solde cumulé au {{ form.end.vars.value|date('d/m/Y') }} : <strong class="money">{{ report.balance|mad }}</strong>
             </p>
-            <small class="text-secondary">Livraisons moins retours moins paiements, depuis le début. Un solde positif est dû par le client ; un solde négatif est un crédit.</small>
+            <small class="text-secondary">Livraisons moins remises moins retours moins paiements, depuis le début. Un solde positif est dû par le client ; un solde négatif est un crédit.</small>
         </div>
         <div class="card table-responsive">
             <table class="table mb-0">
@@ -58,7 +59,7 @@
                             <td>{{ row.kind }}</td>
                             <td>{{ row.label }}</td>
                             <td>{{ row.quantity ?: '—' }}</td>
-                            <td class="money">{{ row.kind == 'Paiement' ? '—' : row.price|mad }}</td>
+                            <td class="money">{{ row.kind in ['Paiement', 'Remise'] ? '—' : row.price|mad }}</td>
                             <td class="money">{{ row.amount|mad }}</td>
                         </tr>
                     {% else %}

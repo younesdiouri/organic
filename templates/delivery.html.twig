@@ -3,6 +3,11 @@
     <h1>Livraison #{{ delivery.id }}</h1>
     <p>{{ delivery.client.name }} · {{ delivery.date|date('d/m/Y') }} · <a href="{{ path('report', {id:delivery.client.id}) }}">Récapitulatif client</a>
     </p>
+    <div class="card p-3 mb-4">
+        <p>Total livré brut : <strong class="money">{{ grossCents|mad }}</strong></p>
+        <p>Remise : <strong class="money">{{ delivery.discountCents|mad }}</strong></p>
+        <p class="mb-0">Total livré net : <strong class="money">{{ (grossCents - delivery.discountCents)|mad }}</strong></p>
+    </div>
     <div class="card table-responsive mb-4">
         <table class="table mb-0">
             <thead>
