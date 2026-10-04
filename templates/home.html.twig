@@ -2,6 +2,44 @@
 {% block body %}
     <h1>Gestion du restaurant</h1>
     <p class="text-secondary">Livraisons, retours et paiements · MAD</p>
+    <div class="row g-4 dashboard mb-4">
+        <div class="col-lg-6">
+            <section class="card dashboard-chart h-100" aria-labelledby="cost-chart-title">
+                <p class="dashboard-eyebrow">Catalogue · top 3</p>
+                <h2 id="cost-chart-title">Les produits les plus coûteux</h2>
+                <p class="text-secondary">Coût matière HT par pièce ou portion, hors main-d’œuvre et énergie.</p>
+                <ol class="dashboard-ranking">
+                    {% for item in dashboard.costs %}
+                        <li>
+                            <div class="dashboard-chart-label"><a href="{{ path('product_show', {id:item.id}) }}">{{ item.name }}</a><strong class="money">{{ item.value|mad }} / {{ item.unit == 'PC' ? 'pièce' : 'portion' }}</strong></div>
+                            <div class="dashboard-track" aria-hidden="true"><span style="width:{{ dashboard.costs[0].value > 0 ? item.value / dashboard.costs[0].value * 100 : 0 }}%"></span></div>
+                        </li>
+                    {% else %}
+                        <li class="dashboard-empty">Aucun coût complet à afficher. Complétez les recettes et les tarifs d’achat dans le catalogue.</li>
+                    {% endfor %}
+                </ol>
+                <p class="dashboard-note">{{ dashboard.computed }} coûts calculés sur {{ dashboard.eligible }} produits éligibles · {{ dashboard.incomplete }} incomplets, exclus du classement.</p>
+            </section>
+        </div>
+        <div class="col-lg-6">
+            <section class="card dashboard-chart dashboard-deliveries h-100" aria-labelledby="delivery-chart-title">
+                <p class="dashboard-eyebrow">Livraisons · top 3</p>
+                <h2 id="delivery-chart-title">Les produits les plus livrés</h2>
+                <p class="text-secondary">30 derniers jours · du {{ dashboard.start|date('d/m/Y') }} au {{ dashboard.end|date('d/m/Y') }} inclus.</p>
+                <ol class="dashboard-ranking">
+                    {% for item in dashboard.delivered %}
+                        <li>
+                            <div class="dashboard-chart-label"><a href="{{ path('product_show', {id:item.id}) }}">{{ item.name }}</a><strong class="money">{{ item.value }} {{ item.unit == 'PC' ? 'pièces' : (item.unit == 'PORTION' ? 'portions' : item.unit) }}</strong></div>
+                            <div class="dashboard-track" aria-hidden="true"><span style="width:{{ dashboard.delivered[0].value > 0 ? item.value / dashboard.delivered[0].value * 100 : 0 }}%"></span></div>
+                        </li>
+                    {% else %}
+                        <li class="dashboard-empty">Aucune livraison sur cette période. Les produits apparaîtront après une livraison enregistrée.</li>
+                    {% endfor %}
+                </ol>
+                <p class="dashboard-note">Quantités livrées brutes · retours non déduits. Articles archivés inclus dans l’historique.</p>
+            </section>
+        </div>
+    </div>
     <div class="row g-3">
         {% for label,route in {'Clients':'clients','Catalogue':'products','Enregistrer une livraison':'delivery_new','Enregistrer un paiement':'payments'} %}
             <div class="col-sm-6 col-lg-3">
