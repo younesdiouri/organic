@@ -3,7 +3,7 @@
 {% macro fields(form, fieldIssues) %}
 {% for field in form %}
 {% set hint = fieldIssues[field.vars.id]|default(null) %}
-{{ form_row(field, hint ? {row_attr:{class:'completion-attention p-2 rounded'},attr:field.vars.attr|merge({class:'completion-input','aria-invalid':'true'}),help:hint,help_attr:{class:'text-danger'}} : {}) }}
+{{ form_row(field, hint ? {row_attr:{class:'completion-attention p-2 rounded'},attr:field.vars.attr|merge({class:'completion-input','aria-invalid':'true'}),help:field.vars.help ?: hint,help_attr:{class:'text-danger'}} : {}) }}
 {% endfor %}
 {% endmacro %}
 {% block body %}

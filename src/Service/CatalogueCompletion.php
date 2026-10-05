@@ -71,7 +71,7 @@ final class CatalogueCompletion
             }
 
             if (!$product->recipeComplete) {
-                $add('verification', 'Composition et rendement à vérifier', 'recette');
+                $add('verification', 'Vérifier la recette', 'recette');
             }
         } else {
             $preferred = $product->purchaseOffers->filter(fn ($offer) => $offer->preferred);

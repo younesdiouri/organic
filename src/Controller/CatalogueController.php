@@ -98,10 +98,16 @@ final class CatalogueController extends AbstractController
         $query = trim($request->query->getString('q'));
         $kind = $request->query->getString('kind');
         $delivery = $request->query->getString('delivery');
-        $rows = array_filter($this->em->getRepository(Product::class)->findBy([], ['name' => 'ASC']), fn (Product $row) => ('' === $kind || $row->kind === $kind) && ('' === $delivery || ('1' === $delivery ? $row->deliveryAvailable() : !$row->deliveryAvailable()))
-            && ('' === $query || str_contains(Catalogue::normalize($row->name.' '.($row->code ?? '').' '.implode(' ', $row->aliases)), Catalogue::normalize($query))));
+        $normalizedQuery = Catalogue::normalize($query);
+        $candidates = $this->em->createQuery('SELECT p.id, p.name, p.code, p.aliases, p.kind, p.active, p.sellable, p.forDelivery FROM App\Entity\Product p ORDER BY p.name, p.id')->getArrayResult();
+        $matches = array_filter($candidates, fn ($row) => ('' === $kind || $row['kind'] === $kind) && ('' === $delivery || ('1' === $delivery ? $row['active'] && $row['sellable'] && $row['forDelivery'] : !($row['active'] && $row['sellable'] && $row['forDelivery'])))
+            && ('' === $query || str_contains(Catalogue::normalize($row['name'].' '.($row['code'] ?? '').' '.implode(' ', $row['aliases'])), $normalizedQuery)));
+        $pagination = $this->paginate($matches, $request);
+        $ids = array_column($pagination['rows'], 'id');
+        $rows = $ids ? $this->em->getRepository(Product::class)->findBy(['id' => $ids], ['name' => 'ASC', 'id' => 'ASC']) : [];
+        $listParameters = array_filter(['q' => $query, 'kind' => $kind, 'delivery' => $delivery, 'page' => $pagination['page'], 'completion' => $completionMode ? '1' : ''], fn ($value) => '' !== $value);
 
-        return $this->render('products.html.twig', ['form' => $form, 'editing' => null !== $id, 'product' => $product, 'rows' => $rows, 'kinds' => Catalogue::KINDS, 'query' => $query, 'kind' => $kind, 'delivery' => $delivery, 'completionMode' => $completionMode], new Response(status: $form->isSubmitted() ? 422 : 200));
+        return $this->render('products.html.twig', ['form' => $form, 'editing' => null !== $id, 'product' => $product, 'rows' => $rows, 'kinds' => Catalogue::KINDS, 'query' => $query, 'kind' => $kind, 'delivery' => $delivery, 'completionMode' => $completionMode, 'pagination' => $pagination, 'listParameters' => $listParameters], new Response(status: $form->isSubmitted() ? 422 : 200));
     }
 
     #[Route('/catalogue/a-completer', name: 'catalogue_completion', methods: ['GET'])]
@@ -110,10 +116,23 @@ final class CatalogueController extends AbstractController
         $all = $this->completion->rows();
         $query = trim($request->query->getString('q'));
         $kind = $request->query->getString('kind');
+        $normalizedQuery = Catalogue::normalize($query);
         $rows = array_filter($all, fn ($row) => ('' === $kind || $row['product']->kind === $kind)
-            && ('' === $query || str_contains(Catalogue::normalize($row['product']->name.' '.($row['product']->code ?? '').' '.implode(' ', $row['product']->aliases)), Catalogue::normalize($query))));
+            && ('' === $query || str_contains(Catalogue::normalize($row['product']->name.' '.($row['product']->code ?? '').' '.implode(' ', $row['product']->aliases)), $normalizedQuery)));
 
-        return $this->render('catalogue_completion.html.twig', ['rows' => $rows, 'total' => count($all), 'query' => $query, 'kind' => $kind, 'kinds' => Catalogue::KINDS]);
+        $pagination = $this->paginate($rows, $request);
+
+        return $this->render('catalogue_completion.html.twig', ['rows' => $pagination['rows'], 'total' => count($all), 'query' => $query, 'kind' => $kind, 'kinds' => Catalogue::KINDS, 'pagination' => $pagination, 'listParameters' => array_filter(['q' => $query, 'kind' => $kind], fn ($value) => '' !== $value)]);
+    }
+
+    private function paginate(array $rows, Request $request): array
+    {
+        $total = count($rows);
+        $pages = max(1, (int) ceil($total / 30));
+        $page = min($pages, max(1, filter_var($request->query->all()['page'] ?? 1, FILTER_VALIDATE_INT) ?: 1));
+        $offset = ($page - 1) * 30;
+
+        return ['rows' => array_slice($rows, $offset, 30), 'total' => $total, 'page' => $page, 'pages' => $pages, 'start' => $total ? $offset + 1 : 0, 'end' => min($offset + 30, $total)];
     }
 
     // Native routes and named forms: https://symfony.com/doc/8.1/routing.html and /forms.html.
@@ -138,7 +157,7 @@ final class CatalogueController extends AbstractController
         $factory = $this->container->get('form.factory');
         $recipe = $factory->createNamedBuilder('recipe', data: ['outputQuantity' => Quantity::format($product->recipeOutputQuantity), 'complete' => $product->recipeComplete, 'notes' => $product->recipeNotes])
             ->add('outputQuantity', TextType::class, ['label' => 'Quantité finale obtenue ('.$product->unit.')', 'required' => false, 'attr' => ['inputmode' => 'decimal'], 'constraints' => [new Assert\Length(max: 20)]])
-            ->add('complete', CheckboxType::class, ['label' => 'Composition et rendement vérifiés', 'required' => false])
+            ->add('complete', CheckboxType::class, ['label' => 'Recette vérifiée', 'required' => false, 'help' => 'Confirmer après avoir vérifié les composants et les quantités.'])
             ->add('notes', TextareaType::class, ['label' => 'Points à vérifier / instructions', 'required' => false, 'constraints' => [new Assert\Length(max: 10000)]])->getForm()->handleRequest($request);
         $component = $factory->createNamedBuilder('component', data: ['component' => $lineId ? $line->component : null, 'quantity' => Quantity::format($line->quantity), 'unit' => $line->unit, 'quantityBasis' => $line->quantityBasis, 'notes' => $line->notes])
             ->add('component', EntityType::class, ['label' => 'Article réutilisé', 'class' => Product::class, 'choice_label' => fn (Product $p) => ($p->code ? $p->code.' — ' : '').$p->name.' ('.$p->unit.')', 'query_builder' => fn ($repo) => $repo->createQueryBuilder('p')->where('p.id <> :id')->setParameter('id', $id)->orderBy('p.name', 'ASC'), 'placeholder' => 'Choisir', 'constraints' => [new Assert\NotNull()]])

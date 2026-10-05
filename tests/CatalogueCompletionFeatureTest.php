@@ -73,6 +73,72 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
         }
     }
 
+    public function testBothCatalogueListsPaginateFilterAndKeepEditContext(): void
+    {
+        $products = [];
+
+        for ($index = 0; $index < 65; ++$index) {
+            $product = new Product();
+            $product->name = sprintf('FICTIF commun %02d', intdiv($index, 2));
+            $product->kind = $index < 31 ? 'ingredient' : 'dish';
+            $product->forDelivery = $index >= 31;
+            $product->aliases = in_array($index, [0, 30, 64], true) ? ['Écume spéciale'] : [];
+            $this->em->persist($product);
+            $products[] = $product;
+        }
+        $this->em->flush();
+        $ids = array_map(fn ($product) => $product->id, $products);
+        self::assertInstanceOf(\Symfony\Bundle\FrameworkBundle\KernelBrowser::class, $browser = self::getClient());
+        $browser->loginUser($this->admin);
+
+        foreach (['/catalogue', '/catalogue/a-completer'] as $path) {
+            $seen = [];
+
+            foreach ([1 => 30, 2 => 30, 3 => 5] as $page => $expectedCount) {
+                $crawler = $browser->request('GET', $path, ['page' => $page]);
+                self::assertResponseIsSuccessful();
+                self::assertCount($expectedCount, $crawler->filter('tbody tr'));
+                self::assertSelectorTextContains('#catalogue-pagination', 'Page '.$page.' / 3');
+                self::assertSelectorTextContains('#catalogue-pagination-bottom', 'Page '.$page.' / 3');
+                self::assertCount(1, $crawler->filter('#catalogue-pagination'));
+                $seen = array_merge($seen, $crawler->filter('tbody tr td:first-child > a')->each(fn ($node) => (int) preg_replace('~^.*/(?:a-completer/)?(\d+)(?:/fiche)?$~', '$1', $node->attr('href'))));
+            }
+            self::assertSame($ids, $seen, 'Every article appears once in the stable catalogue/completion order.');
+
+            foreach (['-2', '0', 'invalid', ['2'], '9999'] as $invalidPage) {
+                $browser->request('GET', $path, ['page' => $invalidPage]);
+                self::assertResponseIsSuccessful();
+                self::assertSelectorTextContains('#catalogue-pagination', 'Page '.('9999' === $invalidPage ? '3' : '1').' / 3');
+            }
+            $crawler = $browser->request('GET', $path, ['q' => 'commun', 'kind' => 'ingredient', 'page' => '2']);
+            self::assertCount(1, $crawler->filter('tbody tr'));
+            self::assertSelectorTextContains('#catalogue-pagination', '31–31 sur 31 articles');
+            $browser->request('GET', $crawler->filter('a[rel="prev"]')->attr('href'));
+            self::assertSelectorTextContains('#catalogue-pagination', '1–30 sur 31 articles');
+            self::assertInputValueSame('q', 'commun');
+            self::assertSelectorExists('#kind option[value="ingredient"][selected]');
+            self::assertSelectorNotExists('form[method="get"] input[name="page"]');
+            $browser->request('GET', $path, ['q' => 'ecume speciale', 'page' => 2]);
+            self::assertSelectorTextContains('#catalogue-pagination', '1–3 sur 3 articles');
+            $browser->request('GET', $path, ['q' => 'aucun résultat']);
+            self::assertSelectorTextContains('#catalogue-pagination', '0–0 sur 0 articles');
+        }
+        $browser->request('GET', '/catalogue', ['delivery' => '1']);
+        self::assertSelectorTextContains('#catalogue-pagination', '1–30 sur 34 articles');
+        $browser->request('GET', '/catalogue', ['delivery' => '0']);
+        self::assertSelectorTextContains('#catalogue-pagination', '1–30 sur 31 articles');
+        $edit = '/catalogue/'.$ids[0].'/modifier';
+        $crawler = $browser->request('GET', $edit, ['q' => 'commun', 'kind' => 'ingredient', 'delivery' => '0', 'page' => '2', 'completion' => '1']);
+        self::assertSelectorExists('form[method="get"] input[name="completion"][value="1"]');
+        $previous = $crawler->filter('a[rel="prev"]')->attr('href');
+        self::assertStringStartsWith($edit.'?', $previous);
+        parse_str((string) parse_url($previous, PHP_URL_QUERY), $parameters);
+        self::assertSame(['q' => 'commun', 'kind' => 'ingredient', 'delivery' => '0', 'page' => '1', 'completion' => '1'], $parameters);
+        $browser->request('GET', $previous);
+        self::assertSelectorTextContains('h2', 'Modifier l’article');
+        self::assertSelectorExists('a[href="/catalogue/a-completer/'.$ids[0].'"]');
+    }
+
     public function testMissingRecipeFieldsAreHighlightedAndCuesDisappearAfterSaving(): void
     {
         $dish = new Product();
@@ -104,6 +170,11 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
         self::assertSelectorNotExists('#recipe_outputQuantity.completion-input');
         self::assertSelectorNotExists('#component_component.completion-input');
         self::assertSelectorExists('#recipe_complete.completion-input');
+        self::assertSelectorTextContains('label[for="recipe_complete"]', 'Recette vérifiée');
+        self::assertSelectorTextContains('#recipe_complete_help', 'Confirmer après avoir vérifié les composants et les quantités.');
+        self::assertSelectorExists('#recipe_complete[aria-describedby="recipe_complete_help"]');
+        self::assertSelectorTextNotContains('body', 'Composition et rendement');
+        self::assertSelectorTextContains('#completion-status', 'Vérifier la recette');
         self::assertSelectorExists('a[href="/catalogue/a-completer/'.$dish->id.'#recipe_complete"]');
         $this->submit($path, 'recipe', ['recipe[complete]' => true]);
         self::assertResponseRedirects($path);

@@ -1,0 +1,10 @@
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 my-3" id="catalogue-pagination{{ paginationSuffix|default('') }}">
+<p class="text-secondary mb-0">{{ pagination.start }}–{{ pagination.end }} sur {{ pagination.total }} article{{ pagination.total != 1 ? 's' }} · Page {{ pagination.page }} / {{ pagination.pages }}</p>
+{% if pagination.pages > 1 %}
+<nav aria-label="Pages du catalogue" class="d-flex flex-wrap gap-2">
+{% set parameters = app.request.attributes.get('_route_params')|merge(listParameters) %}
+{% if pagination.page > 1 %}<a class="btn btn-outline-success" rel="prev" href="{{ path(app.request.attributes.get('_route'),parameters|merge({page:pagination.page - 1})) }}">← Précédente</a>{% endif %}
+{% if pagination.page < pagination.pages %}<a class="btn btn-outline-success" rel="next" href="{{ path(app.request.attributes.get('_route'),parameters|merge({page:pagination.page + 1})) }}">Suivante →</a>{% endif %}
+</nav>
+{% endif %}
+</div>

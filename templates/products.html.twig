@@ -11,12 +11,16 @@
 {{ form_end(form) }}</div></div>
 <div class="col-lg-8 {{ editing ? 'order-2' : 'order-1 order-lg-2' }}">
 <form method="get" class="card p-3 mb-3 d-flex gap-2">
+{% if completionMode %}<input type="hidden" name="completion" value="1">{% endif %}
 <label for="q">Rechercher</label><input id="q" name="q" class="form-control" value="{{ query }}" placeholder="Nom, référence ou alias">
 <label for="kind">Type</label><select id="kind" name="kind" class="form-select"><option value="">Tous</option>{% for label,value in kinds %}<option value="{{ value }}" {{ kind == value ? 'selected' }}>{{ label }}</option>{% endfor %}</select>
 <label for="delivery">Livraison</label><select id="delivery" name="delivery" class="form-select"><option value="">Tous</option><option value="1" {{ delivery == '1' ? 'selected' }}>Disponibles</option><option value="0" {{ delivery == '0' ? 'selected' }}>Indisponibles / archivés</option></select>
 <button class="btn btn-outline-success">Filtrer</button></form>
+{% include '_catalogue_pagination.html.twig' %}
 <div class="card table-responsive"><table class="table mb-0"><thead><tr><th>Article</th><th>Type</th><th>Vente</th><th>Actions</th></tr></thead><tbody>
-{% for row in rows %}<tr><td><a href="{{ path('product_show',{id:row.id}) }}">{{ row.name }}</a>{% if row.code %}<small class="d-block">{{ row.code }}</small>{% endif %}<small class="d-block">{{ row.category }} · {{ row.unit }}</small>{% if not row.active %}<span class="badge text-bg-secondary">Archivé</span>{% endif %}</td><td>{{ kinds|filter(v => v == row.kind)|keys|first }}</td><td>{% if row.sellable %}{{ row.priceCents|mad }}{% endif %}{% if row.deliveryAvailable %}<small class="d-block">Livraison</small>{% endif %}</td><td><a href="{{ path('product_edit',{id:row.id}) }}">Modifier</a><br><a href="{{ path('product_show',{id:row.id}) }}">Recette / achats</a></td></tr>
+{% for row in rows %}<tr><td><a href="{{ path('product_show',{id:row.id}) }}">{{ row.name }}</a>{% if row.code %}<small class="d-block">{{ row.code }}</small>{% endif %}<small class="d-block">{{ row.category }} · {{ row.unit }}</small>{% if not row.active %}<span class="badge text-bg-secondary">Archivé</span>{% endif %}</td><td>{{ kinds|filter(v => v == row.kind)|keys|first }}</td><td>{% if row.sellable %}{{ row.priceCents|mad }}{% endif %}{% if row.deliveryAvailable %}<small class="d-block">Livraison</small>{% endif %}</td><td><a href="{{ path('product_edit',{id:row.id}|merge(listParameters)) }}">Modifier</a><br><a href="{{ path('product_show',{id:row.id}) }}">Recette / achats</a></td></tr>
 {% else %}<tr><td colspan="4">Aucun article.</td></tr>{% endfor %}
-</tbody></table></div></div></div>
+</tbody></table></div>
+{% include '_catalogue_pagination.html.twig' with {paginationSuffix:'-bottom'} %}
+</div></div>
 {% endblock %}
