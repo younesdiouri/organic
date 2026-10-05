@@ -55,7 +55,7 @@ Scénario : livraison de 10 unités à 110 MAD il y a deux jours ; retour de 2 u
 
 Les prix, montants et calculs persistés utilisent uniquement des centimes entiers. Les quantités sont entières de 1 à 100 000 ; prix et paiements ont un plafond de 1 000 000 MAD, avec deux décimales au maximum. Les prix peuvent être nuls ; les paiements doivent être positifs. Les dates de saisie sont comprises entre le 01/01/2000 et aujourd’hui. Le fuseau métier local est **Europe/Paris**, à confirmer pour le restaurant avant tout usage réel.
 
-Une livraison conserve le nom et le prix unitaire du produit lors de la saisie. Modifier le catalogue ne recalcule pas l’historique. Livraisons, retours et paiements sont ajoutés sans écrans de modification/suppression de l’historique. Une correction comptable de l’historique n’est pas encore proposée.
+Une livraison conserve le nom et le prix unitaire du produit lors de la saisie. Dans la livraison, les retours et le récapitulatif, ce nom ouvre la fiche de l’article lié, même après son renommage ou son archivage. Modifier le catalogue ne recalcule pas l’historique. Livraisons, retours et paiements sont ajoutés sans écrans de modification/suppression de l’historique. Une correction comptable de l’historique n’est pas encore proposée.
 
 Le rapport distingue activité de la période et solde cumulé à la date de fin. Solde positif = dette du client ; négatif = crédit. Les retours valorisent le prix de la livraison d’origine. Le CSV UTF-8 utilise `;` et une virgule décimale ; seuls les textes externes sont protégés contre les formules de tableur, les montants négatifs restent des nombres.
 

@@ -124,6 +124,60 @@ final class MvpTest extends WebTestCase
         self::assertSame(0, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM delivery'));
     }
 
+    public function testHistoricalProductLinksKeepTheirArticleAndCsv(): void
+    {
+        [$client, $product] = $this->fixture();
+        $day1 = new \DateTimeImmutable('today -2 days');
+        $day2 = new \DateTimeImmutable('today -1 day');
+        $delivery = $this->ledger->deliver($client, [['product' => $product, 'quantity' => 10, 'price' => '111,25']], $day1, 1000);
+        $line = $this->em->getRepository(DeliveryLine::class)->findOneBy(['delivery' => $delivery]);
+        $this->ledger->returnLine($line, 2, $day2);
+        $this->ledger->pay($client, $day2, '500', 'Paiement FICTIF');
+        $clientId = $client->id;
+        $deliveryId = $delivery->id;
+        $productId = $product->id;
+        $productPath = '/catalogue/'.$productId.'/fiche';
+        $query = ['form' => ['start' => $day1->format('Y-m-d'), 'end' => $day2->format('Y-m-d')]];
+        $this->browser->loginUser($this->admin);
+        $this->browser->request('GET', '/clients/'.$clientId.'/export.csv', $query);
+        self::assertResponseIsSuccessful();
+        $originalCsv = $this->browser->getInternalResponse()->getContent();
+        self::assertStringContainsString('Livraison;"\'@Produit FICTIF";10;111,25;1112,50', $originalCsv);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $product = $em->find(Product::class, $productId);
+        $product->name = 'Plat renommé FICTIF';
+        $product->active = false;
+        $product->priceCents = 15000;
+        $duplicate = new Product();
+        $duplicate->name = '@Produit FICTIF';
+        $em->persist($duplicate);
+        $em->flush();
+        $crawler = $this->browser->request('GET', '/livraisons/'.$deliveryId);
+        self::assertResponseIsSuccessful();
+        self::assertSelectorCount(2, 'tbody a[href="'.$productPath.'"]');
+        self::assertSelectorNotExists('tbody a[href="/catalogue/'.$duplicate->id.'/fiche"]');
+        self::assertSelectorTextContains('tbody a[href="'.$productPath.'"]', '@Produit FICTIF');
+        self::assertSelectorTextContains('body', '111,25 MAD');
+        self::assertSelectorTextContains('body', $day2->format('d/m/Y'));
+        $this->browser->click($crawler->selectLink('@Produit FICTIF')->first()->link());
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('h1', 'Plat renommé FICTIF');
+        self::assertSelectorTextContains('body', 'Archivé');
+        $crawler = $this->browser->request('GET', '/clients/'.$clientId.'/recapitulatif', $query);
+        self::assertResponseIsSuccessful();
+        self::assertSelectorCount(2, 'tbody a[href="'.$productPath.'"]');
+        self::assertSelectorNotExists('tbody a[href="/catalogue/'.$duplicate->id.'/fiche"]');
+        self::assertSame('Livraison #'.$deliveryId, $crawler->filterXPath('//tbody/tr[td[2]="Remise"]/td[3]')->text());
+        self::assertSame('Paiement FICTIF', $crawler->filterXPath('//tbody/tr[td[2]="Paiement"]/td[3]')->text());
+        self::assertCount(0, $crawler->filterXPath('//tbody/tr[td[2]="Remise" or td[2]="Paiement"]/td[3]/a'));
+        $this->browser->click($crawler->selectLink('@Produit FICTIF')->last()->link());
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('h1', 'Plat renommé FICTIF');
+        $this->browser->request('GET', '/clients/'.$clientId.'/export.csv', $query);
+        self::assertResponseIsSuccessful();
+        self::assertSame($originalCsv, $this->browser->getInternalResponse()->getContent());
+    }
+
     public function testDatedReturnsBalanceAndCsv(): void
     {
         [$client, $product] = $this->fixture();

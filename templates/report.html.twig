@@ -57,7 +57,13 @@
                         <tr>
                             <td>{{ row.date|date('d/m/Y') }}</td>
                             <td>{{ row.kind }}</td>
-                            <td>{{ row.label }}</td>
+                            <td>
+                                {% if row.product_id %}
+                                    <a href="{{ path('product_show', {id:row.product_id}) }}">{{ row.label }}</a>
+                                {% else %}
+                                    {{ row.label }}
+                                {% endif %}
+                            </td>
                             <td>{{ row.quantity ?: '—' }}</td>
                             <td class="money">{{ row.kind in ['Paiement', 'Remise'] ? '—' : row.price|mad }}</td>
                             <td class="money">{{ row.amount|mad }}</td>

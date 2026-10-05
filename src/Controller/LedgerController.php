@@ -73,7 +73,7 @@ final class LedgerController extends AbstractController
             throw $this->createNotFoundException();
         }
         $lines = $this->em->getConnection()->fetchAllAssociative('SELECT l.*, COALESCE(SUM(r.quantity), 0) AS returned FROM delivery_line l LEFT JOIN line_return r ON r.line_id = l.id WHERE l.delivery_id = ? GROUP BY l.id ORDER BY l.id', [$id]);
-        $returns = $this->em->getConnection()->fetchAllAssociative('SELECT r.*, l.product_name FROM line_return r JOIN delivery_line l ON l.id = r.line_id WHERE l.delivery_id = ? ORDER BY r.date, r.id', [$id]);
+        $returns = $this->em->getConnection()->fetchAllAssociative('SELECT r.*, l.product_name, l.product_id FROM line_return r JOIN delivery_line l ON l.id = r.line_id WHERE l.delivery_id = ? ORDER BY r.date, r.id', [$id]);
         $grossCents = array_sum(array_map(fn (array $line) => (int) $line['quantity'] * (int) $line['unit_price_cents'], $lines));
 
         return $this->render('delivery.html.twig', ['delivery' => $delivery, 'lines' => $lines, 'returns' => $returns, 'grossCents' => $grossCents]);

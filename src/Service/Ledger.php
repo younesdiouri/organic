@@ -111,16 +111,16 @@ final class Ledger
             throw new \InvalidArgumentException('La date de début doit précéder la date de fin.');
         }
         $sql = <<<SQL
-SELECT d.date, 'Livraison' AS kind, l.product_name AS label, l.quantity, l.unit_price_cents AS price, l.quantity::bigint * l.unit_price_cents AS amount, l.id AS source
+SELECT d.date, 'Livraison' AS kind, l.product_name AS label, l.quantity, l.unit_price_cents AS price, l.quantity::bigint * l.unit_price_cents AS amount, l.id AS source, l.product_id
 FROM delivery d JOIN delivery_line l ON l.delivery_id = d.id WHERE d.client_id = :client AND d.date <= :end
 UNION ALL
-SELECT d.date, 'Remise', 'Livraison #' || d.id, 0, 0, -d.discount_cents::bigint, d.id
+SELECT d.date, 'Remise', 'Livraison #' || d.id, 0, 0, -d.discount_cents::bigint, d.id, NULL::integer
 FROM delivery d WHERE d.client_id = :client AND d.date <= :end AND d.discount_cents > 0
 UNION ALL
-SELECT r.date, 'Retour', l.product_name, -r.quantity, l.unit_price_cents, -r.quantity::bigint * l.unit_price_cents, r.id
+SELECT r.date, 'Retour', l.product_name, -r.quantity, l.unit_price_cents, -r.quantity::bigint * l.unit_price_cents, r.id, l.product_id
 FROM line_return r JOIN delivery_line l ON l.id = r.line_id JOIN delivery d ON d.id = l.delivery_id WHERE d.client_id = :client AND r.date <= :end
 UNION ALL
-SELECT p.date, 'Paiement', p.note, 0, 0, -p.amount_cents::bigint, p.id FROM payment p WHERE p.client_id = :client AND p.date <= :end
+SELECT p.date, 'Paiement', p.note, 0, 0, -p.amount_cents::bigint, p.id, NULL::integer FROM payment p WHERE p.client_id = :client AND p.date <= :end
 ORDER BY date, kind, source
 SQL;
         // ponytail: in-memory history scan for one restaurant; aggregate opening balance in SQL if history grows.

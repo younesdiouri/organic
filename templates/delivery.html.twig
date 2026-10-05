@@ -23,7 +23,7 @@
             <tbody>
                 {% for line in lines %}
                     <tr>
-                        <td>{{ line.product_name }}</td>
+                        <td><a href="{{ path('product_show', {id:line.product_id}) }}">{{ line.product_name }}</a></td>
                         <td>{{ line.quantity }}</td>
                         <td class="money">{{ line.unit_price_cents|mad }}</td>
                         <td class="money">{{ (line.quantity * line.unit_price_cents)|mad }}</td>
@@ -54,7 +54,7 @@
                 {% for row in returns %}
                     <tr>
                         <td>{{ row.date|date('d/m/Y') }}</td>
-                        <td>{{ row.product_name }}</td>
+                        <td><a href="{{ path('product_show', {id:row.product_id}) }}">{{ row.product_name }}</a></td>
                         <td>{{ row.quantity }}</td>
                     </tr>
                 {% else %}
