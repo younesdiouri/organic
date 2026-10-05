@@ -1,0 +1,5 @@
+<nav aria-label="Espaces du catalogue" class="nav nav-pills flex-wrap gap-2 mb-4">
+{% for value,label in spaces %}
+<a class="nav-link {{ kind == value ? 'active bg-success' : 'text-success' }}" {{ kind == value ? 'aria-current="page"' }} href="{{ path('products',value == 'dish' ? {} : {kind:value}) }}">{{ label }}</a>
+{% endfor %}
+</nav>

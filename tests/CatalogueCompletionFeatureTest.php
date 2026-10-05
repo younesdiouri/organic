@@ -91,24 +91,24 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
         self::assertInstanceOf(\Symfony\Bundle\FrameworkBundle\KernelBrowser::class, $browser = self::getClient());
         $browser->loginUser($this->admin);
 
-        foreach (['/catalogue', '/catalogue/a-completer'] as $path) {
+        foreach ([['/catalogue', [], array_slice($ids, 31), [1 => 30, 2 => 4], '1–1 sur 1 article'], ['/catalogue', ['kind' => 'ingredient'], array_slice($ids, 0, 31), [1 => 30, 2 => 1], '1–2 sur 2 articles'], ['/catalogue/a-completer', [], $ids, [1 => 30, 2 => 30, 3 => 5], '1–3 sur 3 articles']] as [$path, $base, $expectedIds, $pages, $aliasCaption]) {
             $seen = [];
 
-            foreach ([1 => 30, 2 => 30, 3 => 5] as $page => $expectedCount) {
-                $crawler = $browser->request('GET', $path, ['page' => $page]);
+            foreach ($pages as $page => $expectedCount) {
+                $crawler = $browser->request('GET', $path, $base + ['page' => $page]);
                 self::assertResponseIsSuccessful();
                 self::assertCount($expectedCount, $crawler->filter('tbody tr'));
-                self::assertSelectorTextContains('#catalogue-pagination', 'Page '.$page.' / 3');
-                self::assertSelectorTextContains('#catalogue-pagination-bottom', 'Page '.$page.' / 3');
+                self::assertSelectorTextContains('#catalogue-pagination', 'Page '.$page.' / '.count($pages));
+                self::assertSelectorTextContains('#catalogue-pagination-bottom', 'Page '.$page.' / '.count($pages));
                 self::assertCount(1, $crawler->filter('#catalogue-pagination'));
-                $seen = array_merge($seen, $crawler->filter('tbody tr td:first-child > a')->each(fn ($node) => (int) preg_replace('~^.*/(?:a-completer/)?(\d+)(?:/fiche)?$~', '$1', $node->attr('href'))));
+                $seen = array_merge($seen, $crawler->filter('tbody tr td:first-child > a')->each(fn ($node) => (int) preg_replace('~^.*/(?:a-completer/)?(\d+)(?:/fiche)?$~', '$1', parse_url($node->attr('href'), PHP_URL_PATH))));
             }
-            self::assertSame($ids, $seen, 'Every article appears once in the stable catalogue/completion order.');
+            self::assertSame($expectedIds, $seen, 'Every article appears once in the stable catalogue/completion order.');
 
             foreach (['-2', '0', 'invalid', ['2'], '9999'] as $invalidPage) {
-                $browser->request('GET', $path, ['page' => $invalidPage]);
+                $browser->request('GET', $path, $base + ['page' => $invalidPage]);
                 self::assertResponseIsSuccessful();
-                self::assertSelectorTextContains('#catalogue-pagination', 'Page '.('9999' === $invalidPage ? '3' : '1').' / 3');
+                self::assertSelectorTextContains('#catalogue-pagination', 'Page '.('9999' === $invalidPage ? count($pages) : '1').' / '.count($pages));
             }
             $crawler = $browser->request('GET', $path, ['q' => 'commun', 'kind' => 'ingredient', 'page' => '2']);
             self::assertCount(1, $crawler->filter('tbody tr'));
@@ -116,16 +116,16 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
             $browser->request('GET', $crawler->filter('a[rel="prev"]')->attr('href'));
             self::assertSelectorTextContains('#catalogue-pagination', '1–30 sur 31 articles');
             self::assertInputValueSame('q', 'commun');
-            self::assertSelectorExists('#kind option[value="ingredient"][selected]');
+            self::assertSelectorExists('/catalogue/a-completer' === $path ? '#kind option[value="ingredient"][selected]' : 'input[name="kind"][value="ingredient"]');
             self::assertSelectorNotExists('form[method="get"] input[name="page"]');
-            $browser->request('GET', $path, ['q' => 'ecume speciale', 'page' => 2]);
-            self::assertSelectorTextContains('#catalogue-pagination', '1–3 sur 3 articles');
+            $browser->request('GET', $path, $base + ['q' => 'ecume speciale', 'page' => 2]);
+            self::assertSelectorTextContains('#catalogue-pagination', $aliasCaption);
             $browser->request('GET', $path, ['q' => 'aucun résultat']);
             self::assertSelectorTextContains('#catalogue-pagination', '0–0 sur 0 articles');
         }
         $browser->request('GET', '/catalogue', ['delivery' => '1']);
         self::assertSelectorTextContains('#catalogue-pagination', '1–30 sur 34 articles');
-        $browser->request('GET', '/catalogue', ['delivery' => '0']);
+        $browser->request('GET', '/catalogue', ['kind' => 'ingredient', 'delivery' => '0']);
         self::assertSelectorTextContains('#catalogue-pagination', '1–30 sur 31 articles');
         $edit = '/catalogue/'.$ids[0].'/modifier';
         $crawler = $browser->request('GET', $edit, ['q' => 'commun', 'kind' => 'ingredient', 'delivery' => '0', 'page' => '2', 'completion' => '1']);
@@ -133,7 +133,7 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
         $previous = $crawler->filter('a[rel="prev"]')->attr('href');
         self::assertStringStartsWith($edit.'?', $previous);
         parse_str((string) parse_url($previous, PHP_URL_QUERY), $parameters);
-        self::assertSame(['q' => 'commun', 'kind' => 'ingredient', 'delivery' => '0', 'page' => '1', 'completion' => '1'], $parameters);
+        self::assertSame(['kind' => 'ingredient', 'q' => 'commun', 'delivery' => '0', 'page' => '1', 'completion' => '1'], $parameters);
         $browser->request('GET', $previous);
         self::assertSelectorTextContains('h2', 'Modifier l’article');
         self::assertSelectorExists('a[href="/catalogue/a-completer/'.$ids[0].'"]');

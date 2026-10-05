@@ -1,6 +1,7 @@
 {% extends 'base.html.twig' %}
 {% block body %}
-<a href="{{ path('products') }}">← Catalogue</a>
+{% include '_catalogue_navigation.html.twig' %}
+<a href="{{ path('products',kind in spaces|keys and kind != 'dish' ? {kind:kind} : {}) }}">← {{ spaces[kind]|default('Carte') }}</a>
 <h1>Articles à compléter</h1>
 <p>{{ total }} article{{ total != 1 ? 's' }} actif{{ total != 1 ? 's' }} avec des informations à renseigner ou vérifier. Les composants manquants peuvent aussi bloquer le coût des recettes qui les utilisent.</p>
 <form method="get" class="card p-3 mb-4">

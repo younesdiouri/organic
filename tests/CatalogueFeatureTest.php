@@ -97,6 +97,105 @@ final class CatalogueFeatureTest extends WebTestCase
         self::assertSame('0.123456', \App\Service\Quantity::format('0.123456'));
     }
 
+    public function testSpacesSeparateComponentsFromCarteAndGroupExactCategories(): void
+    {
+        $categories = ['Starters', 'Salades', 'Wraps', 'Sandwiches', 'Tartines', 'Plats', 'Petit-Dejeuner', 'Kids Menu', 'Bar', 'Cafes', 'Cold Drinks', 'Hot Drinks', 'Jus', 'Shots', 'Smoothies', 'Thes & Infusions', 'Dessert', 'Patisserie', '', 'Livraison'];
+
+        foreach ($categories as $category) {
+            $product = $this->product('FICTIF carte '.($category ?: 'sans catégorie'));
+            $product->category = $category;
+            $product->forDelivery = 'Plats' === $category;
+        }
+
+        foreach (['ingredient', 'preparation', 'packaging'] as $kind) {
+            $product = $this->product('FICTIF composant '.$kind, $kind);
+            $product->category = 'Dessert';
+        }
+        $this->em->flush();
+        $this->browser->loginUser($this->admin);
+        $this->browser->request('GET', '/catalogue');
+        self::assertSelectorTextContains('h1', 'Carte');
+        self::assertSelectorTextNotContains('tbody', 'FICTIF composant');
+        self::assertSelectorCount(20, 'tbody tr');
+        self::assertSelectorNotExists('details[open]');
+
+        foreach (['cuisine' => array_slice($categories, 0, 8), 'boissons' => array_slice($categories, 8, 8), 'desserts' => array_slice($categories, 16, 2), 'a-classer' => array_slice($categories, 18)] as $family => $expected) {
+            $this->browser->request('GET', '/catalogue', ['family' => $family]);
+            self::assertResponseIsSuccessful();
+            self::assertSelectorCount(count($expected), 'tbody tr');
+            self::assertSelectorNotExists('input[name="kind"]');
+            self::assertSelectorExists('input[name="family"][value="'.$family.'"]');
+
+            foreach ($expected as $category) {
+                self::assertSelectorTextContains('tbody', 'FICTIF carte '.($category ?: 'sans catégorie'));
+            }
+        }
+        $this->browser->request('GET', '/catalogue', ['family' => 'boissons', 'category' => 'Smoothies', 'q' => 'carte', 'delivery' => '0']);
+        self::assertSelectorCount(1, 'tbody tr');
+        self::assertSelectorTextContains('tbody', 'FICTIF carte Smoothies');
+        self::assertSelectorTextNotContains('tbody', 'Livraison');
+        $this->browser->request('GET', '/catalogue', ['family' => 'cuisine', 'delivery' => '1']);
+        self::assertSelectorCount(1, 'tbody tr');
+        self::assertSelectorTextContains('tbody', 'FICTIF carte Plats');
+
+        foreach (['ingredient' => 'Ingrédients', 'preparation' => 'Préparations', 'packaging' => 'Emballages'] as $kind => $title) {
+            $crawler = $this->browser->request('GET', '/catalogue', ['kind' => $kind, 'family' => 'desserts']);
+            self::assertSelectorTextContains('h1', $title);
+            self::assertSelectorCount(1, 'tbody tr');
+            self::assertSelectorTextContains('tbody', 'FICTIF composant '.$kind);
+            self::assertSelectorNotExists('#delivery');
+            self::assertSelectorTextNotContains('thead', 'Vente');
+            $this->browser->click($crawler->filter('tbody td:first-child a')->link());
+            self::assertSelectorExists('a[href="/catalogue?kind='.$kind.'"]');
+            self::assertSelectorTextContains('nav[aria-label="Espaces du catalogue"] [aria-current="page"]', $title);
+        }
+        $this->browser->request('GET', '/catalogue', ['kind' => 'all', 'family' => 'invalid']);
+        self::assertSelectorTextContains('h1', 'Carte');
+        self::assertSelectorCount(20, 'tbody tr');
+        self::assertSelectorTextNotContains('tbody', 'FICTIF composant');
+    }
+
+    public function testContextualCreateDefaultsAndEditReturnsPreserveSeparateAvailability(): void
+    {
+        foreach (['dish', 'ingredient', 'preparation', 'packaging'] as $kind) {
+            $path = '/catalogue'.('dish' === $kind ? '' : '?kind='.$kind);
+            $this->browser->request('GET', $path);
+            self::assertResponseRedirects('/connexion');
+        }
+        $this->browser->loginUser($this->admin);
+
+        foreach (['dish' => 'PORTION', 'ingredient' => 'KG', 'preparation' => 'KG', 'packaging' => 'PC'] as $kind => $unit) {
+            $path = '/catalogue'.('dish' === $kind ? '' : '?kind='.$kind);
+            $this->browser->request('GET', $path);
+            self::assertSelectorExists('#form_kind option[value="'.$kind.'"][selected]');
+            self::assertSelectorExists('#form_unit option[value="'.$unit.'"][selected]');
+            self::assertSelectorNotExists('#form_forDelivery[checked]');
+            self::assertSelectorExists('dish' === $kind ? '#form_sellable[checked]' : '#form_sellable:not([checked])');
+            $this->browser->submitForm('Enregistrer', ['form[name]' => 'FICTIF nouveau '.$kind, 'form[price]' => '0']);
+            self::assertResponseRedirects($path);
+            $row = $this->em->getConnection()->fetchAssociative('SELECT id,kind,unit,sellable,for_delivery FROM product WHERE name=?', ['FICTIF nouveau '.$kind]);
+            self::assertSame($kind, $row['kind']);
+            self::assertSame($unit, $row['unit']);
+            self::assertSame('dish' === $kind, $row['sellable']);
+            self::assertFalse($row['for_delivery']);
+        }
+        $id = (int) $this->em->getConnection()->fetchOne('SELECT id FROM product WHERE kind=?', ['dish']);
+        $query = '?family=a-classer&q=nouveau&delivery=0';
+        $crawler = $this->browser->request('GET', '/catalogue'.$query);
+        $this->browser->click($crawler->filter('tbody td:first-child a')->link());
+        self::assertSelectorExists('a[href="/catalogue?q=nouveau&delivery=0&family=a-classer"]');
+        $crawler = $this->browser->getCrawler();
+        $this->browser->click($crawler->selectLink('Modifier l’article')->link());
+        self::assertSelectorExists('details[open]');
+        $this->browser->submitForm('Enregistrer', ['form[forDelivery]' => true]);
+        self::assertResponseRedirects('/catalogue?q=nouveau&delivery=0&family=a-classer');
+        $this->browser->request('GET', '/catalogue/'.$id.'/modifier');
+        self::assertSelectorExists('#form_forDelivery[checked]');
+        $this->browser->submitForm('Enregistrer', ['form[kind]' => 'preparation']);
+        self::assertResponseRedirects('/catalogue?kind=preparation');
+        self::assertTrue((bool) $this->em->getConnection()->fetchOne('SELECT for_delivery FROM product WHERE id=?', [$id]));
+    }
+
     public function testCatalogueRoutesAndMutationsRequireAuthenticationAndCsrf(): void
     {
         $product = $this->product('FICTIF protégé');
@@ -150,7 +249,7 @@ final class CatalogueFeatureTest extends WebTestCase
             'form[kind]' => 'ingredient', 'form[unit]' => 'KG', 'form[category]' => 'Fruits FICTIFS',
             'form[aliases]' => "Citron ancien FICTIF\nLemon FICTIF", 'form[sellable]' => false, 'form[forDelivery]' => false,
         ]);
-        self::assertResponseRedirects('/catalogue');
+        self::assertResponseRedirects('/catalogue?kind=ingredient');
         $db = $this->em->getConnection();
         $ingredientId = (int) $db->fetchOne('SELECT id FROM product WHERE code=?', ['FICTIF-CITRON']);
         self::assertGreaterThan(0, $ingredientId);
@@ -274,9 +373,9 @@ final class CatalogueFeatureTest extends WebTestCase
         self::assertFalse((bool) $db->fetchOne('SELECT active FROM product WHERE id=?', [$available->id]));
         self::assertFalse((bool) $db->fetchOne('SELECT for_delivery FROM product WHERE id=?', [$available->id]));
         $this->browser->request('GET', '/catalogue', ['delivery' => '1']);
-        self::assertSelectorNotExists('tbody a[href="/catalogue/'.$available->id.'/fiche"]');
+        self::assertSelectorNotExists('tbody a[href^="/catalogue/'.$available->id.'/fiche"]');
         $this->browser->request('GET', '/catalogue', ['delivery' => '0']);
-        self::assertSelectorExists('tbody a[href="/catalogue/'.$available->id.'/fiche"]');
+        self::assertSelectorExists('tbody a[href^="/catalogue/'.$available->id.'/fiche"]');
         $this->browser->request('GET', '/livraisons/1');
         self::assertResponseIsSuccessful();
         self::assertSelectorTextContains('body', 'Plat FICTIF disponible');

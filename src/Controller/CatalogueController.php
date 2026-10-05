@@ -28,6 +28,16 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 final class CatalogueController extends AbstractController
 {
+    private const SPACES = ['dish' => 'Carte', 'ingredient' => 'Ingrédients', 'preparation' => 'Préparations', 'packaging' => 'Emballages'];
+
+    private const DRINK_CATEGORIES = ['Bar', 'Cafes', 'Cold Drinks', 'Hot Drinks', 'Jus', 'Shots', 'Smoothies', 'Thes & Infusions'];
+
+    private const DESSERT_CATEGORIES = ['Dessert', 'Desserts', 'Patisserie'];
+
+    private const CUISINE_CATEGORIES = ['Starters', 'Salades', 'Wraps', 'Sandwiches', 'Tartines', 'Plats', 'Petit-Dejeuner', 'Kids Menu'];
+
+    private const CATEGORY_LABELS = ['Cafes' => 'Cafés', 'Cold Drinks' => 'Boissons fraîches', 'Hot Drinks' => 'Boissons chaudes', 'Thes & Infusions' => 'Thés et infusions', 'Dessert' => 'Desserts', 'Patisserie' => 'Pâtisserie', 'Petit-Dejeuner' => 'Petit déjeuner', 'Kids Menu' => 'Menu enfants', 'Sandwiches' => 'Sandwichs'];
+
     public function __construct(private EntityManagerInterface $em, private Catalogue $catalogue, private RecipeCost $cost, private CatalogueCompletion $completion)
     {
     }
@@ -70,10 +80,23 @@ final class CatalogueController extends AbstractController
         if (!$product) {
             throw $this->createNotFoundException();
         }
+        $kind = null !== $id ? $product->kind : $request->query->getString('kind', 'dish');
+        $kind = isset(self::SPACES[$kind]) ? $kind : 'dish';
+
+        if (null === $id) {
+            $product->kind = $kind;
+            $product->unit = match ($kind) {
+                'packaging' => 'PC',
+                'dish' => 'PORTION',
+                default => 'KG',
+            };
+            $product->sellable = 'dish' === $kind;
+            $product->forDelivery = false;
+        }
         $form = $this->createFormBuilder(['name' => $product->name, 'price' => Money::format($product->priceCents), 'code' => $product->code, 'kind' => $product->kind, 'category' => $product->category, 'aliases' => implode("\n", $product->aliases), 'unit' => $product->unit, 'sellable' => $product->sellable, 'forDelivery' => $product->forDelivery, 'active' => $product->active, 'notes' => $product->notes, 'knownZeroCost' => $product->knownZeroCost])
             ->add('name', TextType::class, ['label' => 'Nom de l’article', 'constraints' => [new Assert\NotBlank(), new Assert\Length(max: 120)]])
             ->add('code', TextType::class, ['label' => 'Référence', 'required' => false, 'constraints' => [new Assert\Length(max: 100)]])
-            ->add('kind', ChoiceType::class, ['label' => 'Type', 'choices' => Catalogue::KINDS])
+            ->add('kind', ChoiceType::class, ['label' => 'Espace', 'choices' => array_flip(self::SPACES)])
             ->add('category', TextType::class, ['label' => 'Catégorie', 'required' => false, 'constraints' => [new Assert\Length(max: 120)]])
             ->add('aliases', TextareaType::class, ['label' => 'Alias (un par ligne)', 'required' => false, 'constraints' => [new Assert\Length(max: 4000)]])
             ->add('unit', ChoiceType::class, ['label' => 'Unité de l’article / résultat de recette', 'choices' => Catalogue::UNITS])
@@ -90,24 +113,72 @@ final class CatalogueController extends AbstractController
                 $this->catalogue->saveProduct($product, $form->getData());
                 $this->addFlash('success', 'Article enregistré. Les livraisons précédentes sont conservées.');
 
-                return $this->redirectToRoute($completionMode ? 'product_complete' : 'products', $completionMode ? ['id' => $id] : []);
+                return $this->redirectToRoute($completionMode ? 'product_complete' : 'products', $completionMode ? ['id' => $id] : $this->listParameters($request, $product->kind));
             } catch (\InvalidArgumentException $e) {
                 $form->addError(new FormError($e->getMessage()));
             }
         }
         $query = trim($request->query->getString('q'));
-        $kind = $request->query->getString('kind');
         $delivery = $request->query->getString('delivery');
+        $family = 'dish' === $kind ? $request->query->getString('family') : '';
+        $family = in_array($family, ['cuisine', 'boissons', 'desserts', 'a-classer'], true) ? $family : '';
+        $category = $request->query->getString('category');
         $normalizedQuery = Catalogue::normalize($query);
-        $candidates = $this->em->createQuery('SELECT p.id, p.name, p.code, p.aliases, p.kind, p.active, p.sellable, p.forDelivery FROM App\Entity\Product p ORDER BY p.name, p.id')->getArrayResult();
-        $matches = array_filter($candidates, fn ($row) => ('' === $kind || $row['kind'] === $kind) && ('' === $delivery || ('1' === $delivery ? $row['active'] && $row['sellable'] && $row['forDelivery'] : !($row['active'] && $row['sellable'] && $row['forDelivery'])))
+        $candidates = $this->em->createQuery('SELECT p.id, p.name, p.code, p.aliases, p.category, p.active, p.sellable, p.forDelivery FROM App\Entity\Product p WHERE p.kind = :kind ORDER BY p.name, p.id')->setParameter('kind', $kind)->getArrayResult();
+        $candidates = array_filter($candidates, fn ($row) => '' === $family || $this->family($row['category']) === $family);
+        $categories = array_values(array_unique(array_column($candidates, 'category')));
+        sort($categories);
+        $matches = array_filter($candidates, fn ($row) => ('' === $category || ('__uncategorized' === $category ? '' === $row['category'] : $row['category'] === $category)) && ('' === $delivery || ('1' === $delivery ? $row['active'] && $row['sellable'] && $row['forDelivery'] : !($row['active'] && $row['sellable'] && $row['forDelivery'])))
             && ('' === $query || str_contains(Catalogue::normalize($row['name'].' '.($row['code'] ?? '').' '.implode(' ', $row['aliases'])), $normalizedQuery)));
         $pagination = $this->paginate($matches, $request);
         $ids = array_column($pagination['rows'], 'id');
         $rows = $ids ? $this->em->getRepository(Product::class)->findBy(['id' => $ids], ['name' => 'ASC', 'id' => 'ASC']) : [];
-        $listParameters = array_filter(['q' => $query, 'kind' => $kind, 'delivery' => $delivery, 'page' => $pagination['page'], 'completion' => $completionMode ? '1' : ''], fn ($value) => '' !== $value);
+        $listParameters = $this->listParameters($request, $kind);
+        unset($listParameters['page']);
 
-        return $this->render('products.html.twig', ['form' => $form, 'editing' => null !== $id, 'product' => $product, 'rows' => $rows, 'kinds' => Catalogue::KINDS, 'query' => $query, 'kind' => $kind, 'delivery' => $delivery, 'completionMode' => $completionMode, 'pagination' => $pagination, 'listParameters' => $listParameters], new Response(status: $form->isSubmitted() ? 422 : 200));
+        if ($pagination['page'] > 1) {
+            $listParameters['page'] = $pagination['page'];
+        }
+
+        if ($completionMode) {
+            $listParameters['completion'] = '1';
+        }
+
+        return $this->render('products.html.twig', ['form' => $form, 'editing' => null !== $id, 'product' => $product, 'rows' => $rows, 'kinds' => Catalogue::KINDS, 'spaces' => self::SPACES, 'title' => self::SPACES[$kind], 'query' => $query, 'kind' => $kind, 'family' => $family, 'category' => $category, 'categories' => $categories, 'categoryLabels' => self::CATEGORY_LABELS, 'delivery' => $delivery, 'completionMode' => $completionMode, 'pagination' => $pagination, 'listParameters' => $listParameters], new Response(status: $form->isSubmitted() ? 422 : 200));
+    }
+
+    private function family(string $category): string
+    {
+        return match (true) {
+            in_array($category, self::DRINK_CATEGORIES, true) => 'boissons',
+            in_array($category, self::DESSERT_CATEGORIES, true) => 'desserts',
+            in_array($category, self::CUISINE_CATEGORIES, true) => 'cuisine',
+            default => 'a-classer',
+        };
+    }
+
+    private function listParameters(Request $request, string $kind): array
+    {
+        $parameters = 'dish' === $kind ? [] : ['kind' => $kind];
+        $requestedKind = $request->query->getString('kind', 'dish');
+        $requestedKind = isset(self::SPACES[$requestedKind]) ? $requestedKind : 'dish';
+
+        if ($requestedKind === $kind) {
+            foreach (['q', 'category', 'delivery', 'family'] as $key) {
+                $value = $request->query->getString($key);
+
+                if ('' !== $value && ('family' !== $key || ('dish' === $kind && in_array($value, ['cuisine', 'boissons', 'desserts', 'a-classer'], true)))) {
+                    $parameters[$key] = $value;
+                }
+            }
+            $page = filter_var($request->query->all()['page'] ?? 1, FILTER_VALIDATE_INT);
+
+            if ($page > 1) {
+                $parameters['page'] = $page;
+            }
+        }
+
+        return $parameters;
     }
 
     #[Route('/catalogue/a-completer', name: 'catalogue_completion', methods: ['GET'])]
@@ -122,7 +193,7 @@ final class CatalogueController extends AbstractController
 
         $pagination = $this->paginate($rows, $request);
 
-        return $this->render('catalogue_completion.html.twig', ['rows' => $pagination['rows'], 'total' => count($all), 'query' => $query, 'kind' => $kind, 'kinds' => Catalogue::KINDS, 'pagination' => $pagination, 'listParameters' => array_filter(['q' => $query, 'kind' => $kind], fn ($value) => '' !== $value)]);
+        return $this->render('catalogue_completion.html.twig', ['rows' => $pagination['rows'], 'total' => count($all), 'query' => $query, 'kind' => $kind, 'kinds' => Catalogue::KINDS, 'spaces' => self::SPACES, 'pagination' => $pagination, 'listParameters' => array_filter(['q' => $query, 'kind' => $kind], fn ($value) => '' !== $value)]);
     }
 
     private function paginate(array $rows, Request $request): array
@@ -180,7 +251,7 @@ final class CatalogueController extends AbstractController
                     $save($form->getData());
                     $this->addFlash('success', 'Fiche enregistrée.');
 
-                    return $this->redirectToRoute($completionMode ? 'product_complete' : 'product_show', ['id' => $id]);
+                    return $this->redirectToRoute($completionMode ? 'product_complete' : 'product_show', ['id' => $id] + ($completionMode ? [] : array_diff_key($this->listParameters($request, $product->kind), $request->query->has('kind') ? [] : ['kind' => ''])));
                 } catch (\InvalidArgumentException $e) {
                     $form->addError(new FormError($e->getMessage()));
                 }
@@ -206,7 +277,7 @@ final class CatalogueController extends AbstractController
             }
         }
 
-        return $this->render('product_show.html.twig', ['product' => $product, 'recipe' => $recipe, 'component' => $component, 'offer' => $purchase, 'lineEditing' => null !== $lineId, 'offerEditing' => null !== $offerId, 'cost' => $this->cost->calculate($product), 'usedIn' => $usedIn, 'completionMode' => $completionMode, 'issues' => $issues, 'fieldIssues' => $fieldIssues], new Response(status: $request->isMethod('POST') ? 422 : 200));
+        return $this->render('product_show.html.twig', ['product' => $product, 'recipe' => $recipe, 'component' => $component, 'offer' => $purchase, 'lineEditing' => null !== $lineId, 'offerEditing' => null !== $offerId, 'cost' => $this->cost->calculate($product), 'usedIn' => $usedIn, 'completionMode' => $completionMode, 'issues' => $issues, 'fieldIssues' => $fieldIssues, 'kind' => $product->kind, 'title' => self::SPACES[$product->kind], 'spaces' => self::SPACES, 'listParameters' => $this->listParameters($request, $product->kind)], new Response(status: $request->isMethod('POST') ? 422 : 200));
     }
 
     #[Route('/catalogue/{id}/composition/{lineId}/retirer', name: 'recipe_line_remove', requirements: ['id' => '\d+', 'lineId' => '\d+'], methods: ['POST'])]
@@ -234,6 +305,9 @@ final class CatalogueController extends AbstractController
         }
         $this->catalogue->remove($row);
 
-        return $this->redirectToRoute('1' === $request->query->getString('completion') ? 'product_complete' : 'product_show', ['id' => $productId]);
+        $completionMode = '1' === $request->query->getString('completion');
+        $product = $row instanceof RecipeLine ? $row->parent : $row->product;
+
+        return $this->redirectToRoute($completionMode ? 'product_complete' : 'product_show', ['id' => $productId] + ($completionMode ? [] : array_diff_key($this->listParameters($request, $product->kind), $request->query->has('kind') ? [] : ['kind' => ''])));
     }
 }
