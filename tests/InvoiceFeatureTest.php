@@ -186,6 +186,32 @@ final class InvoiceFeatureTest extends WebTestCase
         self::assertSame(0, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM supplier_invoice'));
     }
 
+    public function testDraftWarningsFollowTotalAndExposeValidationHints(): void
+    {
+        $this->browser->loginUser($this->admin);
+        $token = $this->newDraft();
+        $drafts = self::getContainer()->get(InvoiceDrafts::class);
+        $draft = $drafts->read($token, $this->admin->id, $this->browser->getRequest()->getSession()->getId());
+        $warning = 'Le TTC final complet en MAD n’est pas établi. Vérifier l’original complet et saisir le montant manuellement.';
+        $draft['extraction'] = ['supplier_name' => null, 'date' => null, 'reference' => null, 'document_kind' => null, 'total_cents' => null, 'ht' => '100.00', 'vat' => '20.00', 'warnings' => [$warning, 'Date non lisible.']];
+        $drafts->write($token, $draft);
+        $crawler = $this->browser->request('GET', '/factures-fournisseurs/brouillon/'.$token);
+        self::assertResponseIsSuccessful();
+        self::assertSelectorTextContains('#invoice-total-row #invoice-total-help', $warning);
+        self::assertSame(1, substr_count($crawler->filter('body')->text(), $warning));
+        self::assertSelectorTextContains('body', 'Date non lisible.');
+        self::assertSelectorExists('#invoice-total-row #form_total[required][aria-describedby="invoice-field-guide invoice-total-help"]');
+        self::assertSelectorExists('#invoice-total-help #invoice-arithmetic[data-expected-cents="12000"]');
+        self::assertSame(date('Y-m-d'), $crawler->filter('#form_date')->attr('max'));
+
+        foreach (['name', 'label', 'reference'] as $field) {
+            self::assertSelectorExists('#form_'.$field.'[maxlength="180"]');
+        }
+        self::assertSelectorTextContains('#invoice-field-guide', 'Jaune : valeur à vérifier sur l’original');
+        self::assertSelectorExists('#invoice-save');
+        self::assertSelectorNotExists('#invoice-save.invoice-ready');
+    }
+
     public function testSuccessfulPhotoReadingDoesNotPrefillHumanTotalAndCorrectionIsAudited(): void
     {
         $this->browser->loginUser($this->admin);

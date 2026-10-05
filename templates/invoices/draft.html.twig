@@ -1,11 +1,34 @@
 {% extends 'base.html.twig' %}{% block body %}
+{% set totalWarning = 'Le TTC final complet en MAD n’est pas établi. Vérifier l’original complet et saisir le montant manuellement.' %}
+{% set arithmeticWarning = 'HT + TVA diffère du TTC lu. Aucun montant n’a été recalculé : vérifier le document.' %}
 <h1>Vérifier le document</h1><p><a href="{{ path('invoices') }}">Tous les brouillons et documents</a></p>
 <p class="alert alert-warning">Vérifiez l’original et recopiez le TTC. Un total coupé doit être renseigné manuellement.</p>
 <div class="row g-4"><section class="col-lg-6">
 {% if draft.images %}<p class="small">Toucher la photo pour l’agrandir.</p>{% endif %}{% for image in draft.images %}<a href="{{ path('invoice_photo', {token:token, index:loop.index0}) }}" target="_blank"><img class="invoice-preview img-fluid border mb-3" alt="Page {{ loop.index }} du document à vérifier" src="{{ path('invoice_photo', {token:token, index:loop.index0}) }}"></a>{% endfor %}
 {% if draft.images %}<form action="{{ path('invoice_extract', {token:token}) }}" method="post"><input type="hidden" name="_token" value="{{ csrf_token('invoice_extract_'~token) }}"><button class="btn btn-outline-success">{{ draft.extraction ? 'Relire' : 'Lire' }} avec l’IA</button></form><p class="small mt-2">Ce bouton transmet les photos à OpenAI pour cette lecture, sans stockage demandé côté API. Attendre la réponse avant de quitter la page.</p>{% if not aiConfigured %}<p class="alert alert-info">Lecture automatique non configurée. Renseigner les champs manuellement.</p>{% endif %}{% endif %}
-{% if draft.extraction %}<h2 class="h5 mt-3">Lecture proposée — à vérifier</h2><dl><dt>Nom du vendeur lu sur le document</dt><dd>{{ draft.extraction.supplier_name ?? "Non établi" }}</dd><dt>TTC lu</dt><dd>{{ draft.extraction.total_cents is null ? 'Non lisible / absent — vérifier le document complet' : (draft.extraction.total_cents / 100)|number_format(2, ',', ' ')~' MAD' }}</dd><dt>Preuve imprimée du TTC</dt><dd>{{ draft.extraction.total_evidence ?? 'Aucune' }}</dd><dt>HT / TVA lus</dt><dd>{{ draft.extraction.ht ?? 'Absent' }} / {{ draft.extraction.vat ?? 'Absent' }}</dd></dl>{% for warning in draft.extraction.warnings %}<p class="alert alert-warning">{{ warning }}</p>{% endfor %}{% if not supplier %}<p class="alert alert-info">Fournisseur non reconnu ou alias ambigu : choisir ou créer le fournisseur.</p>{% endif %}{% endif %}
-</section><section class="col-lg-6">{% if arithmeticCents is not null %}<p id="invoice-arithmetic" class="alert alert-warning" data-expected-cents="{{ arithmeticCents }}" hidden>Le TTC saisi diffère du HT + TVA lus. Vérifier l’original ; aucun montant ne sera recalculé.</p>{% endif %}{{ form_start(form, {attr:{id:"invoice-validation"}}) }}<input type="hidden" name="_token" value="{{ csrf_token('invoice_supplier_workflow_'~token) }}">{{ form_widget(form) }}<button class="btn btn-outline-success mb-3" formaction="{{ path('invoice_supplier_workflow', {token:token}) }}" formnovalidate>Créer ou modifier un fournisseur — conserver les champs</button><br><button class="btn btn-success">Valider et enregistrer le document</button>{{ form_end(form) }}
+{% if draft.extraction %}<h2 class="h5 mt-3">Lecture proposée — à vérifier</h2><dl><dt>Nom du vendeur lu sur le document</dt><dd>{{ draft.extraction.supplier_name ?? "Non établi" }}</dd><dt>TTC lu</dt><dd>{{ draft.extraction.total_cents is null ? 'Non lisible / absent — vérifier le document complet' : (draft.extraction.total_cents / 100)|number_format(2, ',', ' ')~' MAD' }}</dd><dt>Preuve imprimée du TTC</dt><dd>{{ draft.extraction.total_evidence ?? 'Aucune' }}</dd><dt>HT / TVA lus</dt><dd>{{ draft.extraction.ht ?? 'Absent' }} / {{ draft.extraction.vat ?? 'Absent' }}</dd></dl>{% for warning in draft.extraction.warnings %}{% if warning not in [totalWarning, arithmeticWarning] %}<p class="alert alert-warning">{{ warning }}</p>{% endif %}{% endfor %}{% if not supplier %}<p class="alert alert-info">Fournisseur non reconnu ou alias ambigu : choisir ou créer le fournisseur.</p>{% endif %}{% endif %}
+</section><section class="col-lg-6">
+{{ form_start(form, {attr:{id:'invoice-validation'}}) }}
+<input type="hidden" name="_token" value="{{ csrf_token('invoice_supplier_workflow_'~token) }}">
+{{ form_errors(form) }}
+<p id="invoice-field-guide" class="small">Rouge : champ obligatoire manquant ou valeur invalide. Jaune : valeur à vérifier sur l’original avant de cocher la confirmation.</p>
+{{ form_row(form.supplier, {attr:{'aria-describedby':'invoice-field-guide'}}) }}
+{% for field in [form.name, form.label] %}{{ form_row(field, {attr:{maxlength:180, 'aria-describedby':'invoice-field-guide'}}) }}{% endfor %}
+{{ form_row(form.date, {attr:{max:'today'|date('Y-m-d'), 'aria-describedby':'invoice-field-guide'}}) }}
+{{ form_row(form.reference, {attr:{maxlength:180, 'aria-describedby':'form_reference_help invoice-field-guide'}}) }}
+{{ form_row(form.kind, {attr:{'aria-describedby':'invoice-field-guide'}}) }}
+<div id="invoice-total-row" class="mb-3">
+{{ form_label(form.total) }}
+{{ form_widget(form.total, {attr:{'aria-describedby':'invoice-field-guide invoice-total-help'}}) }}
+{{ form_errors(form.total) }}
+<div id="invoice-total-help" class="mt-2">
+{% for warning in draft.extraction.warnings ?? [] %}{% if warning in [totalWarning, arithmeticWarning] %}<p class="alert alert-warning">{{ warning }}</p>{% endif %}{% endfor %}
+{% if arithmeticCents is not null %}<p id="invoice-arithmetic" class="alert alert-warning" data-expected-cents="{{ arithmeticCents }}" hidden>Le TTC saisi diffère du HT + TVA lus. Vérifier l’original ; aucun montant ne sera recalculé.</p>{% endif %}
+</div></div>
+{{ form_row(form.confirmed) }}
+<button class="btn btn-outline-success mb-3" formaction="{{ path('invoice_supplier_workflow', {token:token}) }}" formnovalidate>Créer ou modifier un fournisseur — conserver les champs</button><br>
+<button id="invoice-save" class="btn btn-success">Valider et enregistrer le document</button>
+{{ form_end(form) }}
 <p class="small mt-2">Validation définitive : les champs et le total sont conservés avec votre identité et la date de validation. La photo sera supprimée.</p>
 <form action="{{ path('invoice_discard', {token:token}) }}" method="post" class="mt-4"><input type="hidden" name="_token" value="{{ csrf_token('invoice_discard_'~token) }}"><button class="btn btn-outline-danger">Abandonner et supprimer ce brouillon</button></form></section></div>
-<script src="/invoice.js" defer></script>{% endblock %}
+<script src="/invoice.js?v=2" defer></script>{% endblock %}
