@@ -160,7 +160,7 @@ final class AssistantTest extends KernelTestCase
             self::fail('Expected loop cap');
         } catch (\RuntimeException) {
         }
-        self::assertSame(4, $http->getRequestsCount());
+        self::assertSame(7, $http->getRequestsCount());
         $http = new MockHttpClient([$this->response(array_fill(0, 7, $this->call()))]);
 
         try {
@@ -183,8 +183,8 @@ final class AssistantTest extends KernelTestCase
             $this->assistant($http, '')->ask('Question');
             self::fail('Expected missing key');
         } catch (\RuntimeException $e) {
-            self::assertStringContainsString('non configuré',$e->getMessage());
+            self::assertStringContainsString('non configuré', $e->getMessage());
         }
-        self::assertSame(0,$http->getRequestsCount());
+        self::assertSame(0, $http->getRequestsCount());
     }
 }

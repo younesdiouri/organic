@@ -105,26 +105,26 @@ final class Ledger
         $this->em->flush();
     }
 
-    public function report(Client $client, \DateTimeImmutable $start, \DateTimeImmutable $end): array
+    public function report(?Client $client, \DateTimeImmutable $start, \DateTimeImmutable $end): array
     {
         if ($start > $end) {
             throw new \InvalidArgumentException('La date de début doit précéder la date de fin.');
         }
         $sql = <<<SQL
-SELECT d.date, 'Livraison' AS kind, l.product_name AS label, l.quantity, l.unit_price_cents AS price, l.quantity::bigint * l.unit_price_cents AS amount, l.id AS source, l.product_id
-FROM delivery d JOIN delivery_line l ON l.delivery_id = d.id WHERE d.client_id = :client AND d.date <= :end
+SELECT d.date, 'Livraison' AS kind, l.product_name AS label, l.quantity, l.unit_price_cents AS price, l.quantity::bigint * l.unit_price_cents AS amount, l.id AS source, l.product_id, d.id AS delivery_id, l.id AS delivery_line_id, d.date AS delivery_date, c.id AS client_id, c.name AS client_name
+FROM delivery d JOIN delivery_line l ON l.delivery_id = d.id JOIN client c ON c.id=d.client_id WHERE (:client=0 OR d.client_id = :client) AND d.date <= :end
 UNION ALL
-SELECT d.date, 'Remise', 'Livraison #' || d.id, 0, 0, -d.discount_cents::bigint, d.id, NULL::integer
-FROM delivery d WHERE d.client_id = :client AND d.date <= :end AND d.discount_cents > 0
+SELECT d.date, 'Remise', 'Livraison #' || d.id, 0, 0, -d.discount_cents::bigint, d.id, NULL::integer, d.id, NULL::integer, d.date, c.id, c.name
+FROM delivery d JOIN client c ON c.id=d.client_id WHERE (:client=0 OR d.client_id = :client) AND d.date <= :end AND d.discount_cents > 0
 UNION ALL
-SELECT r.date, 'Retour', l.product_name, -r.quantity, l.unit_price_cents, -r.quantity::bigint * l.unit_price_cents, r.id, l.product_id
-FROM line_return r JOIN delivery_line l ON l.id = r.line_id JOIN delivery d ON d.id = l.delivery_id WHERE d.client_id = :client AND r.date <= :end
+SELECT r.date, 'Retour', l.product_name, -r.quantity, l.unit_price_cents, -r.quantity::bigint * l.unit_price_cents, r.id, l.product_id, d.id, l.id, d.date, c.id, c.name
+FROM line_return r JOIN delivery_line l ON l.id = r.line_id JOIN delivery d ON d.id = l.delivery_id JOIN client c ON c.id=d.client_id WHERE (:client=0 OR d.client_id = :client) AND r.date <= :end
 UNION ALL
-SELECT p.date, 'Paiement', p.note, 0, 0, -p.amount_cents::bigint, p.id, NULL::integer FROM payment p WHERE p.client_id = :client AND p.date <= :end
+SELECT p.date, 'Paiement', p.note, 0, 0, -p.amount_cents::bigint, p.id, NULL::integer, NULL::integer, NULL::integer, NULL::date, c.id, c.name FROM payment p JOIN client c ON c.id=p.client_id WHERE (:client=0 OR p.client_id = :client) AND p.date <= :end
 ORDER BY date, kind, source
 SQL;
         // ponytail: in-memory history scan for one restaurant; aggregate opening balance in SQL if history grows.
-        $all = $this->em->getConnection()->fetchAllAssociative($sql, ['client' => $client->id, 'end' => $end->format('Y-m-d')]);
+        $all = $this->em->getConnection()->fetchAllAssociative($sql, ['client' => $client->id ?? 0, 'end' => $end->format('Y-m-d')]);
         $opening = 0;
         $totals = ['Livraison' => 0, 'Remise' => 0, 'Retour' => 0, 'Paiement' => 0];
         $rows = [];

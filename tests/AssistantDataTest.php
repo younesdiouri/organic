@@ -174,7 +174,7 @@ final class AssistantDataTest extends KernelTestCase
                     return;
                 }
                 $db = $event->getObjectManager()->getConnection();
-                $this->settings[] = ['readonly' => $db->fetchOne('SHOW transaction_read_only'), 'timeout' => $db->fetchOne('SHOW statement_timeout')];
+                $this->settings[] = ['readonly' => $db->fetchOne('SHOW transaction_read_only'), 'timeout' => $db->fetchOne('SHOW statement_timeout'), 'isolation' => $db->fetchOne('SHOW transaction_isolation')];
             }
         };
         $events = $this->em->getEventManager();
@@ -185,7 +185,7 @@ final class AssistantDataTest extends KernelTestCase
         } finally {
             $events->removeEventListener(['postLoad'], $listener);
         }
-        self::assertSame([['readonly' => 'on', 'timeout' => '3s']], $listener->settings);
+        self::assertSame([['readonly' => 'on', 'timeout' => '3s', 'isolation' => 'repeatable read']], $listener->settings);
         self::assertFalse($this->em->getConnection()->isTransactionActive());
         $this->em->clear();
         $listener->settings = [];
@@ -196,7 +196,7 @@ final class AssistantDataTest extends KernelTestCase
         } finally {
             $events->removeEventListener(['postLoad'], $listener);
         }
-        self::assertSame([['readonly' => 'on', 'timeout' => '3s']], $listener->settings);
+        self::assertSame([['readonly' => 'on', 'timeout' => '3s', 'isolation' => 'repeatable read']], $listener->settings);
         self::assertFalse($this->em->getConnection()->isTransactionActive());
     }
 
