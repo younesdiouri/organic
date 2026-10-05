@@ -168,8 +168,26 @@ final class CatalogueController extends AbstractController
             }
         }
         $usedIn = $this->em->getRepository(RecipeLine::class)->findBy(['component' => $product]);
+        $issues = $this->completion->issues($product);
+        $fieldIssues = [];
 
-        return $this->render('product_show.html.twig', ['product' => $product, 'recipe' => $recipe, 'component' => $component, 'offer' => $purchase, 'lineEditing' => null !== $lineId, 'offerEditing' => null !== $offerId, 'cost' => $this->cost->calculate($product), 'usedIn' => $usedIn, 'completionMode' => $completionMode, 'issues' => $completionMode ? $this->completion->issues($product) : []], new Response(status: $request->isMethod('POST') ? 422 : 200));
+        foreach ($issues as $issue) {
+            if ($issue['parameters']['id'] !== $id || (isset($issue['parameters']['lineId']) && $issue['parameters']['lineId'] !== $lineId) || (isset($issue['parameters']['offerId']) && $issue['parameters']['offerId'] !== $offerId)) {
+                continue;
+            }
+            $fields = match ($issue['kind']) {
+                'composition' => ['component_component', 'component_quantity'],
+                'purchase' => $offerId ? ['offer_preferred'] : ['offer_price', 'offer_preferred', 'offer_supplier'],
+                'yield', 'verification', 'supplier', 'unit' => [$issue['anchor']],
+                default => [],
+            };
+
+            foreach ($fields as $field) {
+                $fieldIssues[$field] = 'component_quantity' === $field ? 'Renseigner la quantité consommée pour ce composant, dans l’unité choisie.' : $issue['label'];
+            }
+        }
+
+        return $this->render('product_show.html.twig', ['product' => $product, 'recipe' => $recipe, 'component' => $component, 'offer' => $purchase, 'lineEditing' => null !== $lineId, 'offerEditing' => null !== $offerId, 'cost' => $this->cost->calculate($product), 'usedIn' => $usedIn, 'completionMode' => $completionMode, 'issues' => $issues, 'fieldIssues' => $fieldIssues], new Response(status: $request->isMethod('POST') ? 422 : 200));
     }
 
     #[Route('/catalogue/{id}/composition/{lineId}/retirer', name: 'recipe_line_remove', requirements: ['id' => '\d+', 'lineId' => '\d+'], methods: ['POST'])]

@@ -56,7 +56,7 @@ final class CatalogueFeatureTest extends WebTestCase
 
     public function testPersistedQuantitiesDisplayWithoutTrailingDecimalZeros(): void
     {
-        $product = $this->product('Recette FICTIVE quantités');
+        $product = $this->product('Article FICTIF quantités', 'ingredient');
         $product->recipeOutputQuantity = '8.000000';
         $product->recipeComplete = true;
         $ingredient = $this->product('Ingrédient FICTIF quantités', 'ingredient');
@@ -296,7 +296,7 @@ final class CatalogueFeatureTest extends WebTestCase
 
     public function testDuplicateCodesAndInvalidQuantitiesDoNotMutateCatalogue(): void
     {
-        $product = $this->product('Article FICTIF existant');
+        $product = $this->product('Article FICTIF existant', 'ingredient');
         $product->code = 'FICTIF-UNIQUE';
         $product->aliases = ['Ancien nom FICTIF'];
         $component = $this->product('Composant FICTIF');

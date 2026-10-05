@@ -7,6 +7,7 @@ use App\Entity\Product;
 use App\Entity\PurchaseOffer;
 use App\Entity\RecipeLine;
 use App\Entity\Supplier;
+use App\Service\CatalogueCompletion;
 use App\Service\Dashboard;
 use App\Service\RecipeCost;
 use Doctrine\ORM\EntityManagerInterface;
@@ -37,6 +38,160 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
         $crawler = self::getClient()->request('GET', $path);
         self::assertResponseIsSuccessful();
         self::getClient()->submit($crawler->filter('form[name="'.$name.'"]')->form($values));
+    }
+
+    public function testInternalProductionHasNoSupplierUiOrSupplierIssues(): void
+    {
+        self::assertInstanceOf(\Symfony\Bundle\FrameworkBundle\KernelBrowser::class, $browser = self::getClient());
+        $browser->loginUser($this->admin);
+
+        foreach (['dish', 'preparation', 'ingredient', 'packaging'] as $kind) {
+            $product = new Product();
+            $product->name = 'FICTIF '.$kind;
+            $product->kind = $kind;
+            $offer = new PurchaseOffer();
+            $offer->product = $product;
+            $product->purchaseOffers->add($offer);
+            $this->em->persist($product);
+            $this->em->flush();
+            $issues = self::getContainer()->get(CatalogueCompletion::class)->issues($product);
+            self::getClient()->request('GET', '/catalogue/'.$product->id.'/fiche');
+            self::assertResponseIsSuccessful();
+
+            if (in_array($kind, ['dish', 'preparation'], true)) {
+                self::assertSelectorNotExists('#achats');
+                self::assertSelectorNotExists('#offer_supplier');
+                self::assertSelectorTextContains('body', 'Production interne — les fournisseurs sont renseignés sur les ingrédients.');
+                self::assertNotContains('supplier', array_column($issues, 'kind'));
+            } else {
+                self::assertSelectorExists('#achats');
+                self::assertSelectorExists('#offer_supplier');
+                self::assertContains('supplier', array_column($issues, 'kind'));
+            }
+            self::assertSame(1, (int) $this->em->getConnection()->fetchOne('SELECT COUNT(*) FROM purchase_offer WHERE product_id=?', [$product->id]));
+            $this->em = self::getContainer()->get(EntityManagerInterface::class);
+        }
+    }
+
+    public function testMissingRecipeFieldsAreHighlightedAndCuesDisappearAfterSaving(): void
+    {
+        $dish = new Product();
+        $dish->name = 'FICTIF recette à compléter';
+        $ingredient = new Product();
+        $ingredient->name = 'FICTIF eau gratuite recette';
+        $ingredient->kind = 'ingredient';
+        $ingredient->unit = 'L';
+        $ingredient->knownZeroCost = true;
+        $this->em->persist($dish);
+        $this->em->persist($ingredient);
+        $this->em->flush();
+        self::assertInstanceOf(\Symfony\Bundle\FrameworkBundle\KernelBrowser::class, $browser = self::getClient());
+        $browser->loginUser($this->admin);
+        $path = '/catalogue/'.$dish->id.'/fiche';
+        self::getClient()->request('GET', $path);
+
+        foreach (['recipe_outputQuantity', 'recipe_complete', 'component_component', 'component_quantity'] as $field) {
+            self::assertSelectorExists('#'.$field.'.completion-input[aria-invalid="true"]');
+            self::assertSelectorExists('#'.$field.'_help.text-danger');
+        }
+        self::assertSelectorExists('#recipe_outputQuantity[inputmode="decimal"][aria-describedby="recipe_outputQuantity_help"]');
+        self::assertSelectorExists('a[href="/catalogue/a-completer/'.$dish->id.'#recipe_outputQuantity"]');
+        $this->submit($path, 'component', ['component[component]' => $ingredient->id, 'component[quantity]' => '0,5', 'component[unit]' => 'L']);
+        self::assertResponseRedirects($path);
+        $this->submit($path, 'recipe', ['recipe[outputQuantity]' => '2', 'recipe[complete]' => false]);
+        self::assertResponseRedirects($path);
+        self::getClient()->followRedirect();
+        self::assertSelectorNotExists('#recipe_outputQuantity.completion-input');
+        self::assertSelectorNotExists('#component_component.completion-input');
+        self::assertSelectorExists('#recipe_complete.completion-input');
+        self::assertSelectorExists('a[href="/catalogue/a-completer/'.$dish->id.'#recipe_complete"]');
+        $this->submit($path, 'recipe', ['recipe[complete]' => true]);
+        self::assertResponseRedirects($path);
+        self::getClient()->followRedirect();
+        self::assertSelectorNotExists('.completion-attention');
+        self::assertSelectorNotExists('#completion-status');
+        self::assertSelectorTextContains('body', 'Coût matière : 0,00 MAD');
+    }
+
+    public function testLineAndOfferCuesPointToExistingRecordsAndNestedDependencies(): void
+    {
+        $ingredient = new Product();
+        $ingredient->name = 'FICTIF ingrédient tarif';
+        $ingredient->kind = 'ingredient';
+        $ingredient->unit = 'KG';
+        $offer = new PurchaseOffer();
+        $offer->product = $ingredient;
+        $offer->unit = 'PC';
+        $offer->preferred = true;
+        $ingredient->purchaseOffers->add($offer);
+        $otherOffer = new PurchaseOffer();
+        $otherOffer->product = $ingredient;
+        $supplier = new Supplier();
+        $supplier->name = 'FICTIF fournisseur complet';
+        $otherOffer->supplier = $supplier;
+        $ingredient->purchaseOffers->add($otherOffer);
+        $preparation = new Product();
+        $preparation->name = 'FICTIF préparation intermédiaire';
+        $preparation->kind = 'preparation';
+        $preparation->recipeOutputQuantity = '2';
+        $line = new RecipeLine();
+        $line->parent = $preparation;
+        $line->component = $ingredient;
+        $line->unit = 'L';
+        $preparation->recipeLines->add($line);
+        $otherLine = new RecipeLine();
+        $otherLine->parent = $preparation;
+        $otherLine->component = $ingredient;
+        $otherLine->unit = 'KG';
+        $preparation->recipeLines->add($otherLine);
+        $dish = new Product();
+        $dish->name = 'FICTIF plat imbriqué';
+        $dish->recipeOutputQuantity = '1';
+        $dish->recipeComplete = true;
+        $nested = new RecipeLine();
+        $nested->parent = $dish;
+        $nested->component = $preparation;
+        $nested->unit = 'PORTION';
+        $dish->recipeLines->add($nested);
+
+        foreach ([$supplier, $ingredient, $preparation, $dish] as $entity) {
+            $this->em->persist($entity);
+        }
+        $this->em->flush();
+        self::assertInstanceOf(\Symfony\Bundle\FrameworkBundle\KernelBrowser::class, $browser = self::getClient());
+        $browser->loginUser($this->admin);
+        self::getClient()->request('GET', '/catalogue/'.$dish->id.'/fiche');
+        self::assertSelectorExists('.completion-attention a[href="/catalogue/a-completer/'.$preparation->id.'#recette"]');
+        self::assertSelectorNotExists('#component_component.completion-input');
+        self::getClient()->request('GET', '/catalogue/'.$preparation->id.'/fiche');
+        $lineEdit = '/catalogue/'.$preparation->id.'/composition/'.$line->id.'/modifier?completion=1';
+        self::assertSelectorExists('a[href="'.$lineEdit.'#component_unit"]');
+        self::assertSelectorExists('.completion-attention a[href="/catalogue/a-completer/'.$ingredient->id.'#achats"]');
+        self::assertSelectorNotExists('#component_unit.completion-input');
+        self::getClient()->request('GET', $lineEdit);
+        self::assertSelectorExists('#component_unit.completion-input');
+        self::assertSelectorExists('#recipe_complete.completion-input');
+        self::assertSelectorNotExists('#recipe_outputQuantity.completion-input');
+        self::getClient()->request('GET', '/catalogue/'.$preparation->id.'/composition/'.$otherLine->id.'/modifier');
+        self::assertSelectorNotExists('#component_unit.completion-input');
+        self::getClient()->request('GET', '/catalogue/'.$ingredient->id.'/fiche');
+        self::assertSelectorNotExists('#offer_supplier.completion-input');
+        $offerEdit = '/catalogue/'.$ingredient->id.'/achat/'.$offer->id.'/modifier?completion=1';
+        self::assertSelectorExists('a[href="'.$offerEdit.'#offer_supplier"]');
+        self::getClient()->request('GET', $offerEdit);
+        self::assertSelectorExists('#offer_supplier.completion-input');
+        self::assertSelectorExists('#offer_unit.completion-input');
+        self::assertSelectorNotExists('#offer_preferred.completion-input');
+        self::getClient()->request('GET', '/catalogue/'.$ingredient->id.'/achat/'.$otherOffer->id.'/modifier');
+        self::assertSelectorNotExists('#offer_supplier.completion-input');
+        self::assertSelectorNotExists('#offer_unit.completion-input');
+        $db = $this->em->getConnection();
+        $db->executeStatement('UPDATE purchase_offer SET preferred = FALSE WHERE id=?', [$offer->id]);
+        $crawler = self::getClient()->request('GET', '/catalogue/'.$ingredient->id.'/fiche');
+        self::assertSelectorNotExists('#offer_preferred.completion-input');
+        $preferredEdit = $crawler->filter('#completion-status a[href$="#offer_preferred"]')->attr('href');
+        self::getClient()->request('GET', $preferredEdit);
+        self::assertSelectorExists('#offer_preferred.completion-input');
     }
 
     public function testCompletionUsesExistingTariffAndUnblocksParentCost(): void
@@ -93,6 +248,7 @@ final class CatalogueCompletionFeatureTest extends WebTestCase
     {
         $product = new Product();
         $product->name = 'FICTIF validation';
+        $product->kind = 'ingredient';
         $this->em->persist($product);
         $this->em->flush();
         $path = '/catalogue/a-completer/'.$product->id;

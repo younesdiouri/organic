@@ -1,13 +1,20 @@
 {% extends 'base.html.twig' %}
+{% set internalProduction = product.kind in ['dish','preparation'] %}
+{% macro fields(form, fieldIssues) %}
+{% for field in form %}
+{% set hint = fieldIssues[field.vars.id]|default(null) %}
+{{ form_row(field, hint ? {row_attr:{class:'completion-attention p-2 rounded'},attr:field.vars.attr|merge({class:'completion-input','aria-invalid':'true'}),help:hint,help_attr:{class:'text-danger'}} : {}) }}
+{% endfor %}
+{% endmacro %}
 {% block body %}
 <a href="{{ path(completionMode ? 'catalogue_completion' : 'products') }}">← {{ completionMode ? 'Articles à compléter' : 'Catalogue' }}</a>
 <h1>{{ completionMode ? 'Compléter : ' }}{{ product.name }}</h1><p>{{ product.code }} · {{ product.category }} · {{ product.unit }}{% if not product.active %} · Archivé{% endif %}</p>
 <p><a class="btn btn-outline-success" href="{{ path('product_edit',{id:product.id}|merge(completionMode ? {completion:1} : {})) }}">Modifier l’article</a></p>
 {% if product.aliases %}<p>Alias : {{ product.aliases|join(', ') }}</p>{% endif %}
 {% if product.notes %}<p class="text-break">{{ product.notes }}</p>{% endif %}
-{% if completionMode %}
+{% if completionMode or issues %}
 <div class="alert {{ issues ? 'alert-warning' : 'alert-success' }}" id="completion-status">
-{% if issues %}<strong>Informations à compléter</strong><ul class="mb-0 mt-2">{% for issue in issues %}<li><a href="{{ path(issue.route,issue.parameters) }}#{{ issue.section }}">{{ issue.label }}</a></li>{% endfor %}</ul>
+{% if issues %}<strong>Informations à compléter</strong><p class="mb-0">Suivre un lien ci-dessous ou remplir les champs encadrés en rouge.</p><ul class="mb-0 mt-2">{% for issue in issues %}<li><a href="{{ path(issue.route,issue.parameters) }}#{{ issue.anchor }}">{{ issue.label }}</a></li>{% endfor %}</ul>
 {% else %}<strong>Article complet.</strong> Les informations à vérifier sont résolues. <a href="{{ path('catalogue_completion') }}">Passer au prochain article</a>.{% endif %}
 </div>
 {% endif %}
@@ -19,25 +26,33 @@
 <div class="row g-4">
 {% set purchasesFirst = completionMode and product.kind in ['ingredient','packaging'] %}
 <section class="{{ purchasesFirst ? 'col-lg-5 order-2' : 'col-lg-7' }}"><div class="card p-3 mb-3" id="recette"><h2 class="h4">Recette et rendement</h2>
-{{ form_start(recipe) }}{{ form_widget(recipe) }}<button class="btn btn-success">Enregistrer la recette</button>{{ form_end(recipe) }}
+{{ form_start(recipe) }}{{ form_errors(recipe) }}{{ _self.fields(recipe,fieldIssues) }}<button class="btn btn-success">Enregistrer la recette</button>{{ form_end(recipe) }}
 </div><div class="card p-3 mb-3" id="composition"><h2 class="h4">Composition</h2>
-{% for line in product.recipeLines %}<div class="border-bottom py-3 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-3"><div class="row-details flex-grow-1">
+{% for line in product.recipeLines %}
+{% set lineIssues = issues|filter(issue => issue.parameters.lineId|default(null) == line.id or (issue.kind == 'dependency' and issue.parameters.id == line.component.id)) %}
+<div class="border-bottom py-3 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-3 {{ lineIssues ? 'completion-attention p-2 rounded' }}"><div class="row-details flex-grow-1">
 <a href="{{ path(completionMode ? 'product_complete' : 'product_show',{id:line.component.id}) }}">{{ line.component.name }}</a> — {{ line.quantity|quantity }} {{ line.unit }} ({{ line.quantityBasis == 'raw' ? 'brut' : 'utilisable' }})
 {% if line.notes %}<p>{{ line.notes }}</p>{% endif %}
+{% for issue in lineIssues %}<p class="mb-1"><a class="text-danger" href="{{ path(issue.route,issue.parameters) }}#{{ issue.anchor }}">{{ issue.label }}</a></p>{% endfor %}
 </div><div class="row-actions d-flex align-items-start gap-2 flex-shrink-0"><a class="btn btn-sm btn-outline-success d-inline-flex align-items-center justify-content-center" href="{{ path('recipe_line_edit',{id:product.id,lineId:line.id}|merge(completionMode ? {completion:1} : {})) }}#composition" aria-label="Modifier le composant {{ line.component.name }}" title="Modifier le composant"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5L16 3Z"/><path d="m14 5 5 5"/></svg></a>
 <form class="m-0" method="post" action="{{ path('recipe_line_remove',{id:product.id,lineId:line.id}|merge(completionMode ? {completion:1} : {})) }}"><input type="hidden" name="_token" value="{{ csrf_token('remove_line_'~line.id) }}"><button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Retirer {{ line.component.name }} de la recette" title="Retirer de la recette"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></form></div></div>
 {% else %}<p>Aucun composant. Une recette vide garde un coût incomplet.</p>{% endfor %}
 <h3 class="h5 mt-3">{{ lineEditing ? 'Modifier le composant' : 'Ajouter un composant' }}</h3>
-{{ form_start(component) }}{{ form_widget(component) }}<button class="btn btn-success">{{ lineEditing ? 'Enregistrer le composant' : 'Ajouter le composant' }}</button>{{ form_end(component) }}
+{{ form_start(component) }}{{ form_errors(component) }}{{ _self.fields(component,fieldIssues) }}<button class="btn btn-success">{{ lineEditing ? 'Enregistrer le composant' : 'Ajouter le composant' }}</button>{{ form_end(component) }}
 </div></section>
-<section class="{{ purchasesFirst ? 'col-lg-7 order-1' : 'col-lg-5' }}"><div class="card p-3 mb-3" id="achats"><h2 class="h4">Achats et fournisseurs</h2>
+<section class="{{ purchasesFirst ? 'col-lg-7 order-1' : 'col-lg-5' }}">
+{% if internalProduction %}<p class="text-secondary">Production interne — les fournisseurs sont renseignés sur les ingrédients.</p>
+{% else %}<div class="card p-3 mb-3" id="achats"><h2 class="h4">Achats et fournisseurs</h2>
 <p>Les quantités doivent utiliser l’unité de l’article. Convertir les grammes en kg et les ml en litres. Un prix absent conserve un coût incomplet.</p>
-{% for purchase in product.purchaseOffers %}<div class="border-bottom py-3 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-3"><div class="row-details flex-grow-1">
+{% for purchase in product.purchaseOffers %}
+{% set purchaseIssues = issues|filter(issue => issue.parameters.offerId|default(null) == purchase.id) %}
+<div class="border-bottom py-3 d-flex flex-column flex-sm-row justify-content-between align-items-start gap-3 {{ purchaseIssues ? 'completion-attention p-2 rounded' }}"><div class="row-details flex-grow-1">
 <strong>{% if purchase.supplier %}<a href="{{ path('supplier_show',{id:purchase.supplier.id}) }}">{{ purchase.supplier.name }}</a>{% else %}Fournisseur à renseigner{% endif %}</strong>{% if purchase.preferred %} <span class="badge text-bg-success">Préféré</span>{% endif %}
 <div>{{ purchase.priceCents|mad }} HT / {{ purchase.quantity|quantity }} {{ purchase.unit }}</div><div>Rendement utilisable : {{ purchase.usableYield|quantity }}</div>{% if purchase.notes %}<p>{{ purchase.notes }}</p>{% endif %}
+{% for issue in purchaseIssues %}<p class="mb-1"><a class="text-danger" href="{{ path(issue.route,issue.parameters) }}#{{ issue.anchor }}">{{ issue.label }}</a></p>{% endfor %}
 </div><div class="row-actions d-flex align-items-start gap-2 flex-shrink-0"><a class="btn btn-sm btn-outline-success d-inline-flex align-items-center justify-content-center" href="{{ path('purchase_offer_edit',{id:product.id,offerId:purchase.id}|merge(completionMode ? {completion:1} : {})) }}#achats" aria-label="Modifier le tarif {{ purchase.supplier ? purchase.supplier.name : 'sans fournisseur' }}" title="Modifier le tarif"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5-13 13H3v-5L16 3Z"/><path d="m14 5 5 5"/></svg></a><form class="m-0" method="post" action="{{ path('purchase_offer_remove',{id:product.id,offerId:purchase.id}|merge(completionMode ? {completion:1} : {})) }}"><input type="hidden" name="_token" value="{{ csrf_token('remove_offer_'~purchase.id) }}"><button type="submit" class="btn btn-sm btn-outline-danger" aria-label="Retirer le tarif {{ purchase.supplier ? purchase.supplier.name : 'sans fournisseur' }}" title="Retirer le tarif"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button></form></div></div>
 {% else %}<p>Aucun tarif d’achat. Les fabrications internes sont décrites par leur recette.</p>{% endfor %}
 <h3 class="h5 mt-3">{{ offerEditing ? 'Modifier le tarif' : 'Ajouter un tarif' }}</h3>
-{{ form_start(offer) }}{{ form_widget(offer) }}<button class="btn btn-success">{{ offerEditing ? 'Enregistrer le tarif' : 'Ajouter le tarif' }}</button>{{ form_end(offer) }}
-</div><div class="card p-3"><h2 class="h4">Utilisé dans</h2>{% for line in usedIn %}<p><a href="{{ path('product_show',{id:line.parent.id}) }}">{{ line.parent.name }}</a></p>{% else %}<p>Aucune recette utilisatrice.</p>{% endfor %}</div></section></div>
+{{ form_start(offer) }}{{ form_errors(offer) }}{{ _self.fields(offer,fieldIssues) }}<button class="btn btn-success">{{ offerEditing ? 'Enregistrer le tarif' : 'Ajouter le tarif' }}</button>{{ form_end(offer) }}
+</div>{% endif %}<div class="card p-3"><h2 class="h4">Utilisé dans</h2>{% for line in usedIn %}<p><a href="{{ path('product_show',{id:line.parent.id}) }}">{{ line.parent.name }}</a></p>{% else %}<p>Aucune recette utilisatrice.</p>{% endfor %}</div></section></div>
 {% endblock %}

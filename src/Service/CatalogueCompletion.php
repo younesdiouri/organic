@@ -49,7 +49,16 @@ final class CatalogueCompletion
             if ($offerId) {
                 $parameters += ['offerId' => $offerId, 'completion' => '1'];
             }
-            $issues[] = ['kind' => $kind, 'label' => $label, 'route' => $route, 'parameters' => $parameters, 'section' => $section];
+            $anchor = match ($kind) {
+                'composition' => 'component_component',
+                'yield' => 'recipe_outputQuantity',
+                'verification' => 'recipe_complete',
+                'purchase' => $offerId ? 'offer_preferred' : 'offer_price',
+                'supplier' => 'offer_supplier',
+                'unit' => $lineId ? 'component_unit' : 'offer_unit',
+                default => $section,
+            };
+            $issues[] = ['kind' => $kind, 'label' => $label, 'route' => $route, 'parameters' => $parameters, 'section' => $section, 'anchor' => $anchor];
         };
 
         if (in_array($product->kind, ['dish', 'preparation'], true)) {
@@ -77,11 +86,11 @@ final class CatalogueCompletion
                     $add('unit', 'Unité du tarif incompatible avec '.$product->unit, 'achats', offerId: $offer->id);
                 }
             }
-        }
 
-        foreach ($product->purchaseOffers as $offer) {
-            if (null === $offer->supplier) {
-                $add('supplier', 'Fournisseur du tarif à renseigner', 'achats', offerId: $offer->id);
+            foreach ($product->purchaseOffers as $offer) {
+                if (null === $offer->supplier) {
+                    $add('supplier', 'Fournisseur du tarif à renseigner', 'achats', offerId: $offer->id);
+                }
             }
         }
         $dependencies = [];
