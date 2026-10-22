@@ -618,7 +618,7 @@ final class CatalogueSource
             return false;
         }
 
-        return '' !== $this->v($row, $prep ? 'D' : 'C') || ('' !== $this->v($row,$prep ? 'F' : 'E') && '' !== $this->v($row,$prep ? 'G' : 'F'));
+        return '' !== $this->v($row, $prep ? 'D' : 'C') || ('' !== $this->v($row, $prep ? 'F' : 'E') && '' !== $this->v($row, $prep ? 'G' : 'F'));
     }
 
     private function normalize(string $name): string
@@ -628,12 +628,12 @@ final class CatalogueSource
 
     private function decimal(string $value): ?string
     {
-        $value = str_replace(',','.',trim($value));
+        $value = str_replace(',', '.', trim($value));
 
-        if (!preg_match('/^[0-9]{1,10}(?:\.[0-9]{1,16})?$/D',$value)) {
+        if (!preg_match('/^[0-9]{1,10}(?:\.[0-9]{1,16})?$/D', $value)) {
             return null;
         }
 
-        return bcadd($value,'0',6);
+        return bcadd($value, '0', 6);
     }
 }

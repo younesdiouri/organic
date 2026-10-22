@@ -1,4 +1,5 @@
-FROM php:8.4-apache-bookworm AS base
+# PHP figé au patch : 8.4.27 corrige CVE-2026-109618/109619 (RCE non authentifiées)
+FROM php:8.4.27-apache-bookworm AS base
 RUN apt-get update && apt-get install -y --no-install-recommends libpq-dev libicu-dev unzip && docker-php-ext-install pdo_pgsql intl bcmath && a2enmod rewrite && rm -rf /var/lib/apt/lists/*
 COPY --from=composer:2.10.3 /usr/bin/composer /usr/local/bin/composer
 ENV APACHE_DOCUMENT_ROOT=/app/public
