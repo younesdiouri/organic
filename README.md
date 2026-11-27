@@ -242,3 +242,27 @@ PostgreSQL est accessible sur le réseau privé du projet Compose. Le rôle appl
 Sauvegarder la base PostgreSQL et le volume de fichiers monté sur `/data` (photos et brouillons de factures, sessions, cache). Les noms de volumes en production sont `organic-production_db` et `organic-production_files`. Pour vérifier une restauration, comparer les tables et leur contenu, puis tester la lecture depuis Symfony avec son rôle applicatif.
 
 Les brouillons expirés sont nettoyés lors de l’utilisation ou par `app:invoice-drafts:cleanup`. Google Sheets nécessite ses propres identifiants. Utiliser un compte administrateur dédié en production.
+
+### Livrer une version et consulter les logs
+
+Depuis le Mac, connecter Tailscale au réseau privé du VPS. Dans les commandes ci-dessous, `vps-prod` est un alias personnel de `~/.ssh/config`. Y définir `HostName` (adresse Tailscale du VPS), `User` (compte SSH) et `HostKeyAlias` (nom déjà vérifié dans `known_hosts`). Garder les valeurs réelles sur le Mac. Vérifier l’accès avec `ssh vps-prod hostname`.
+
+Depuis le dépôt local, construire l’image du commit validé sur le VPS. Le pipeline envoie les fichiers suivis du commit. Un push Git seul ne construit aucune image dans la configuration actuelle.
+
+```sh
+set -o pipefail
+revision=$(git rev-parse --verify HEAD)
+git archive "$revision" | ssh vps-prod "sudo docker build --target prod -t organic-web:$revision -"
+```
+
+Dans Dokploy, ouvrir **Organic → production → erp**. Conserver le tag précédent et remplacer uniquement `services.web.image` par `organic-web:<commit>` dans le Compose. Garder le nom du projet, les volumes et le service `database`. Si la livraison modifie le schéma, sauvegarder la base et les fichiers, puis appliquer les migrations prévues avec un rôle autorisé avant de servir la nouvelle version. Déployer la ressource et vérifier la connexion à l’ERP ainsi que la lecture d’une livraison existante.
+
+Après `ssh vps-prod`, exécuter sur le VPS :
+
+```sh
+sudo docker ps --filter label=com.docker.compose.project=organic-production
+sudo docker logs --tail 100 -f organic-production-web-1
+sudo docker exec -it --user www-data organic-production-web-1 php bin/console about
+```
+
+Ctrl+C quitte le suivi des logs. Les utilisateurs du restaurant accèdent à l’ERP en HTTPS sans Tailscale.
