@@ -37,5 +37,6 @@ jobs:
           printf '%s' "$TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           docker push "$IMAGE:$GITHUB_SHA"
           ref=$(docker image inspect "$IMAGE:$GITHUB_SHA" --format '{{index .RepoDigests 0}}')
+          docker pull "$ref"
           echo "image=$ref" >> "$GITHUB_OUTPUT"
-          echo "Published `$ref`" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Published `%s`\n' "$ref" >> "$GITHUB_STEP_SUMMARY"
