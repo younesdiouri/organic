@@ -1,6 +1,6 @@
 # Organic To Go
 
-Application d’administration française pour un restaurant, Symfony 8.1 / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. Développement local et déploiement Fly autorisé sur `organic-to-go`. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
+Application d’administration française pour un restaurant, Symfony 8.1 / PHP 8.4, Twig, Bootstrap 5.3.8, Doctrine ORM et PostgreSQL 17. L’ERP de production est accessible sur https://organic.nafs.cc. Lecture OpenAI et envoi Google Sheets facultatifs, déclenchés uniquement par l’utilisateur. Aucun document privé fourni dans le dépôt.
 
 ## Démarrer
 
@@ -158,7 +158,7 @@ L’import valide toutes les relations et les cycles avant écriture, puis utili
 
 La rubrique **Assistant** (`/assistant`) propose une question et une réponse en français après connexion. Chaque question est indépendante, sans historique enregistré ni appel API lors d’un GET. Exemples : « Détaille la livraison n°1 : plats, quantités, prix facturés et remise. », « Quels retours ce client a-t-il faits sur cette période ? », « Quels produits fournit Les Maîtres des Délices ? », « Quel est le total des factures validées de ce fournisseur en septembre 2026 ? », « Quels ingrédients entrent dans le wrap tuna ? » ou « Quels clients ont un solde restant dû aujourd’hui ? ». Pour « coûte le plus cher », l’assistant doit demander de préciser coût matière, prix catalogue ou prix facturé ; pour une activité sans période, il demande les dates.
 
-Il utilise la clé serveur `OPENAI_API_KEY` déjà partagée avec la lecture de documents, et `OPENAI_ASSISTANT_MODEL=gpt-6-luna` par défaut (facultatif dans `.env.local` ou les secrets Fly). En local, après une modification de configuration, recréer uniquement le service web et vider le cache avec les commandes de la section OpenAI ci-dessous. Sans clé, la page indique que l’assistant n’est pas configuré.
+Il utilise la clé serveur `OPENAI_API_KEY` déjà partagée avec la lecture de documents, et `OPENAI_ASSISTANT_MODEL=gpt-6-luna` par défaut (facultatif dans `.env.local` ou le fichier d’environnement privé du service web sur le VPS). En local, après une modification de configuration, recréer uniquement le service web et vider le cache avec les commandes de la section OpenAI ci-dessous. Sans clé, la page indique que l’assistant n’est pas configuré.
 
 L’API Responses dispose de fonctions autorisées pour le catalogue, les recettes, les classements et ratios coût/prix, les clients et leurs soldes, la recherche et le détail des livraisons, les mouvements datés par client, les ventes par produit et client, les fournisseurs, leurs tarifs et leurs documents validés. Les livraisons détaillées exposent l’identifiant du plat, son libellé historique et son nom actuel, les quantités, le prix unitaire facturé, le montant de ligne et les quantités retournées/restantes. Les mouvements datés comprennent livraisons, remises, retours et paiements ; les retours référencent leur livraison d’origine. Les totaux sont calculés sur tous les résultats du filtre avant pagination. Les totaux de factures fournisseurs et de bons de livraison restent séparés pour éviter de compter deux fois un même achat ; aucun statut de règlement fournisseur n’est déduit.
 
@@ -231,22 +231,14 @@ Le bouton **Envoyer les documents manquants dans Google Sheets** transmet tous l
 
 Les tests couvrent l’extraction avec API simulée (TTC littéral, coupure, HT/TVA incohérents, réponse invalide/quota/refus), les contrôles photo, les propriétaires/sessions/CSRF, la confirmation TTC obligatoire, les snapshots, doublons et répétitions, le nettoyage, le CSV sécurisé et Google Sheets `RAW`/idempotent. Un test réel OpenAI ou Google Sheets exige les credentials facultatifs et n’est pas simulé dans l’interface.
 
-## Déploiement Fly
+## Production sur le VPS OVH
 
-`fly.toml` définit une seule Machine web toujours active à Paris (`cdg`), CPU partagé et 512 Mo, sans worker. La base PostgreSQL dédiée existante reste externe à cette application. Le volume `organic_data` monté sur `/data` conserve photos privées, sessions et cache des limitations de connexion ; le cache du conteneur Symfony reste éphémère. Les déploiements ne changent ni la base locale ni les autres applications Fly.
+Dans Dokploy, ouvrir **Organic → production → erp**. Le projet Compose `organic-production` contient le service Symfony `web` et le service PostgreSQL 17 `database`. Traefik redirige HTTP vers HTTPS et renouvelle le certificat de `organic.nafs.cc` avec Let’s Encrypt. Les routes métier exigent une session administrateur.
 
-L’image `prod` contient uniquement le code et les dépendances de production verrouillées. `.dockerignore` exclut secrets, photos, sessions, documents privés et dépendances locales. Le démarrage exige `APP_SECRET` et `DATABASE_URL`, prépare seulement les trois répertoires connus du volume et chauffe le cache comme `www-data`. Les migrations sont exécutées dans la Machine de release sans volume avant le démarrage web. Apache accepte deux requêtes simultanées pour rester dans les 512 Mo ; une lecture IA longue peut occuper l’une de ces places.
+L’image de production démarre avec `APP_SECRET` et `DATABASE_URL`. Le fichier privé `/etc/organic-production/web.env` fournit ces valeurs au conteneur web, ainsi que la configuration de lecture des factures. Symfony accepte `X-Forwarded-Proto` depuis le proxy désigné par `TRUSTED_PROXIES`. En local, cette variable reste vide.
 
-```sh
-rtk proxy fly volumes create organic_data --app organic-to-go --region cdg --size 1
-# Importer APP_SECRET, DATABASE_URL et éventuellement OPENAI_API_KEY via stdin sécurisé.
-rtk proxy fly secrets import --app organic-to-go
-rtk proxy fly deploy --app organic-to-go --ha=false
-rtk proxy fly ssh console --app organic-to-go --pty -C "su -s /bin/sh www-data -c \"php bin/console app:admin votre-adresse@example.com\""
-```
+PostgreSQL est accessible sur le réseau privé du projet Compose. Le rôle applicatif `organic_web` dispose des droits de lecture et d’écriture nécessaires et de politiques de sécurité au niveau des lignes (RLS) sur les tables métier. Lors d’une migration qui crée une table protégée, vérifier son accès avec ce rôle.
 
-Ne pas utiliser le compte de démonstration en production. Le volume unique implique une seule Machine ; un redéploiement peut occasionner une brève interruption. Sauvegarder séparément PostgreSQL et le volume Fly. Les brouillons expirés sont nettoyés lors de l’utilisation ou par `app:invoice-drafts:cleanup`, sans tâche automatique. Google Sheets reste désactivé tant que ses credentials dédiés ne sont pas configurés.
+Sauvegarder la base PostgreSQL et le volume de fichiers monté sur `/data` (photos et brouillons de factures, sessions, cache). Les noms de volumes en production sont `organic-production_db` et `organic-production_files`. Pour vérifier une restauration, comparer les tables et leur contenu, puis tester la lecture depuis Symfony avec son rôle applicatif.
 
-Avec Supabase, les tables métier restent accessibles uniquement au backend Symfony : la migration `Version20261004000300` active RLS sans politique publique et retire tous les droits de `PUBLIC`, `anon` et `authenticated`, y compris sur leurs séquences. La migration `Version20261004000400` protège de la même manière les tables de composition et de tarifs d’achat. Utiliser une connexion serveur propriétaire des tables ; ce propriétaire conserve son accès sans `FORCE ROW LEVEL SECURITY`. Aucune clé publique Supabase n’est utilisée par l’application. La migration ne touche pas les autres tables et son retour arrière est bloqué pour éviter de rouvrir les données. Voir la [documentation Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
-
-HTTPS est imposé par Fly. Symfony fait confiance aux adresses privées du proxy pour `X-Forwarded-Proto` uniquement ; les en-têtes de host et port transmis ne sont pas acceptés. En local `TRUSTED_PROXIES` est vide. La limitation de connexion utilise l’adresse du proxy : son quota global peut donc être partagé entre utilisateurs, choix conservateur pour cette petite application administrative. Sources : [proxies Symfony 8.1](https://symfony.com/doc/8.1/deployment/proxies.html), [en-têtes Fly](https://fly.io/docs/networking/request-headers/) et [configuration Fly](https://fly.io/docs/reference/configuration/).
+Les brouillons expirés sont nettoyés lors de l’utilisation ou par `app:invoice-drafts:cleanup`. Google Sheets nécessite ses propres identifiants. Utiliser un compte administrateur dédié en production.
