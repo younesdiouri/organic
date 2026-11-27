@@ -247,15 +247,11 @@ Les brouillons expirés sont nettoyés lors de l’utilisation ou par `app:invoi
 
 Depuis le Mac, connecter Tailscale au réseau privé du VPS. Dans les commandes ci-dessous, `vps-prod` est un alias personnel de `~/.ssh/config`. Y définir `HostName` (adresse Tailscale du VPS), `User` (compte SSH) et `HostKeyAlias` (nom déjà vérifié dans `known_hosts`). Garder les valeurs réelles sur le Mac. Vérifier l’accès avec `ssh vps-prod hostname`.
 
-Depuis le dépôt local, construire l’image du commit validé sur le VPS. Le pipeline envoie les fichiers suivis du commit. Un push Git seul ne construit aucune image dans la configuration actuelle.
+Publier une **GitHub Release stable** sur le commit validé de `organic`. Le workflow Release construit l’image de production, la publie sur GHCR et livre son digest exact au VPS via Tailscale. Les préreleases et les fusions sur `main` ne déclenchent aucune mise en production. **Actions → Release → Run workflow** sur `main` teste la publication, le téléchargement depuis le VPS et la connexion à la base sans basculer les conteneurs.
 
-```sh
-set -o pipefail
-revision=$(git rev-parse --verify HEAD)
-git archive "$revision" | ssh vps-prod "sudo docker build --target prod -t organic-web:$revision -"
-```
+Le VPS sérialise les livraisons du projet. Avant une migration en attente, il sauvegarde PostgreSQL et les fichiers persistants dans `/var/backups/organic/release-*` puis lance Doctrine une fois. Prévoir des migrations compatibles avec les versions applicatives qui coexistent pendant la livraison. Dokploy redéploie le service web dans la ressource erp. Le contrôle final vérifie le conteneur et la réponse HTTP publique.
 
-Dans Dokploy, ouvrir **Organic → production → erp**. Conserver le tag précédent et remplacer uniquement `services.web.image` par `organic-web:<commit>` dans le Compose. Garder le nom du projet, les volumes et le service `database`. Si la livraison modifie le schéma, sauvegarder la base et les fichiers, puis appliquer les migrations prévues avec un rôle autorisé avant de servir la nouvelle version. Déployer la ressource et vérifier la connexion à l’ERP ainsi que la lecture d’une livraison existante.
+En cas d’échec pendant la bascule, le service tente de remettre l’image précédente en service. Pour revenir manuellement à cette image, si le schéma le permet, exécuter `sudo /usr/local/sbin/dokploy-release organic rollback` sur le VPS. Une restauration de données reste une opération distincte.
 
 Après `ssh vps-prod`, exécuter sur le VPS :
 

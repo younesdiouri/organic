@@ -17,7 +17,7 @@ jobs:
     outputs:
       image: ${{ steps.publish.outputs.image }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
       - name: Build production image
@@ -40,3 +40,42 @@ jobs:
           docker pull "$ref"
           echo "image=$ref" >> "$GITHUB_OUTPUT"
           printf 'Published `%s`\n' "$ref" >> "$GITHUB_STEP_SUMMARY"
+
+  delivery:
+    needs: image
+    if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: production-release
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      packages: read
+    steps:
+      - name: Join the private deployment network
+        uses: tailscale/github-action@064b10558093f38325e838ddea35486bdc6b1d5c # v4
+        with:
+          oauth-client-id: ${{ vars.TS_CLIENT_ID }}
+          audience: api.tailscale.com/${{ vars.TS_CLIENT_ID }}
+          tags: tag:release-ci
+          use-cache: false
+      - name: Verify or deploy the published digest
+        env:
+          MODE: ${{ github.event_name == 'release' && 'release' || 'probe' }}
+          IMAGE: ${{ needs.image.outputs.image }}
+          HOST: ${{ secrets.RELEASE_HOST }}
+          HOST_KEY: ${{ secrets.RELEASE_HOST_KEY }}
+          KEY: ${{ secrets.RELEASE_KEY }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          umask 077
+          dir=$(mktemp -d)
+          trap 'rm -rf "$dir"' EXIT
+          printf '%s\n' "$KEY" > "$dir/key"
+          printf '%s\n' "$HOST_KEY" > "$dir/known_hosts"
+          printf '%s' "$TOKEN" | ssh -T -p 2222 -i "$dir/key" -o BatchMode=yes \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o HostKeyAlias=release-host \
+            -o UserKnownHostsFile="$dir/known_hosts" "release-organic@$HOST" \
+            "$MODE ${IMAGE##*@} $GITHUB_SHA $GITHUB_REPOSITORY_OWNER"
